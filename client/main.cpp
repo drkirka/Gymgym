@@ -2,7 +2,11 @@
 #include <string>
 #include <vector>
 #include <limits>
+#include <ftxui/component/component.hpp>
+#include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/dom/elements.hpp>
 
+using namespace ftxui;
 struct User {
     std::string name;
     std::string goal;
@@ -12,215 +16,295 @@ struct User {
     std::string limitations;
 };
 
-void clearInput() {
-    std::cin.clear();
-    std::cin.ignore(10000, '\n');
+std::vector<User> users;
+
+std::string goalLabel(const std::string& g) {
+    if (g == "muscle_gain")    return "Muscle Gain";
+    if (g == "weight_loss")    return "Weight Loss";
+    if (g == "general_fitness") return "General Fitness";
+    return g;
 }
 
-std::string inputNonEmpty(const std::string& prompt) {
-    std::string value;
-    while (true) {
-        std::cout << prompt;
-        std::getline(std::cin, value);
+std::string levelLabel(const std::string& l) {
+    if (l == "beginner")     return "Beginner";
+    if (l == "intermediate") return "Intermediate";
+    if (l == "advanced")     return "Advanced / Athlete";
+    return l;
+}
 
-        if (!value.empty()) return value;
-
-        std::cout << "Input cannot be empty. Try again.\n";
+std::string recommendPlan(const User& u) {
+    if (u.goal == "muscle_gain") {
+        if (u.level == "beginner")     return "Beginner Full Body";
+        if (u.level == "intermediate") return "Upper / Lower Split";
+        return "Push / Pull / Legs";
     }
+    if (u.goal == "weight_loss") return "Fat Loss + Cardio Plan";
+    return "General Fitness Plan";
 }
 
-std::string inputGoal() {
-    int option;
-
-    while (true) {
-        std::cout << "\nChoose goal:\n";
-        std::cout << "1. Muscle gain\n";
-        std::cout << "2. Weight loss\n";
-        std::cout << "3. General fitness\n";
-        std::cout << "Option: ";
-
-        std::cin >> option;
-
-        if (std::cin.fail()) {
-            clearInput();
-            std::cout << "Invalid input. Try again.\n";
-            continue;
-        }
-
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-        if (option == 1) return "muscle_gain";
-        if (option == 2) return "weight_loss";
-        if (option == 3) return "general_fitness";
-
-        std::cout << "Please enter 1, 2, or 3.\n";
-    }
-}
-
-std::string inputLevel() {
-    int option;
-
-    while (true) {
-        std::cout << "\nChoose level:\n";
-        std::cout << "1. Beginner\n";
-        std::cout << "2. Intermediate\n";
-        std::cout << "3. Advanced / Athlete\n";
-        std::cout << "Option: ";
-
-        std::cin >> option;
-
-        if (std::cin.fail()) {
-            clearInput();
-            std::cout << "Invalid input. Try again.\n";
-            continue;
-        }
-
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-        if (option == 1) return "beginner";
-        if (option == 2) return "intermediate";
-        if (option == 3) return "advanced";
-
-        std::cout << "Please enter 1, 2, or 3.\n";
-    }
-}
-
-int inputInt(const std::string& prompt, int min, int max) {
-    int value;
-
-    while (true) {
-        std::cout << prompt;
-        std::cin >> value;
-
-        if (std::cin.fail()) {
-            clearInput();
-            std::cout << "Invalid number. Try again.\n";
-            continue;
-        }
-
-        if (value < min || value > max) {
-            std::cout << "Value must be between " << min << " and " << max << ".\n";
-            continue;
-        }
-
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        return value;
-    }
-}
-
-int findUser(const std::vector<User>& users, const std::string& name) {
-    for (int i = 0; i < users.size(); i++) {
+int findUser(const std::string& name) {
+    for (int i = 0; i < (int)users.size(); i++)
         if (users[i].name == name) return i;
-    }
     return -1;
 }
 
-void printUser(const User& u) {
-    std::cout << "\n=== User Profile ===\n";
-    std::cout << "Name: " << u.name << "\n";
-    std::cout << "Goal: " << u.goal << "\n";
-    std::cout << "Level: " << u.level << "\n";
-    std::cout << "Days: " << u.daysPerWeek << "\n";
-    std::cout << "Duration: " << u.durationMinutes << " min\n";
-    std::cout << "Limitations: " << u.limitations << "\n";
+void screenCreateUser() {
+    auto screen = ScreenInteractive::TerminalOutput();
+
+    std::string name, limitations;
+    int goalSel = 0, levelSel = 0, daysSel = 0, durSel = 0;
+    std::string message;
+
+    std::vector<std::string> goals = { "Muscle Gain", "Weight Loss", "General Fitness" };
+    std::vector<std::string> levels = { "Beginner", "Intermediate", "Advanced / Athlete" };
+    std::vector<std::string> days;
+    for (int i = 1; i <= 7; i++) days.push_back(std::to_string(i) + " day" + (i > 1 ? "s" : ""));
+    std::vector<std::string> durations = { "30 min", "45 min", "60 min", "75 min", "90 min", "120 min" };
+    std::vector<int> durValues = { 30, 45, 60, 75, 90, 120 };
+
+    auto nameInput = Input(&name, "Your name");
+    auto limitInput = Input(&limitations, "e.g. bad knee, none");
+    auto goalMenu = Radiobox(&goals, &goalSel);
+    auto levelMenu = Radiobox(&levels, &levelSel);
+    auto daysMenu = Radiobox(&days, &daysSel);
+    auto durMenu = Radiobox(&durations, &durSel);
+
+    auto saveBtn = Button("  Save  ", [&] {
+        if (name.empty() || limitations.empty()) {
+            message = "Fill in all fields!";
+            return;
+        }
+        if (findUser(name) != -1) {
+            message = "User already exists!";
+            return;
+        }
+        std::vector<std::string> goalKeys = { "muscle_gain", "weight_loss", "general_fitness" };
+        std::vector<std::string> levelKeys = { "beginner", "intermediate", "advanced" };
+        User u;
+        u.name = name;
+        u.goal = goalKeys[goalSel];
+        u.level = levelKeys[levelSel];
+        u.daysPerWeek = daysSel + 1;
+        u.durationMinutes = durValues[durSel];
+        u.limitations = limitations;
+        users.push_back(u);
+        screen.ExitLoopClosure()();
+        });
+
+    auto backBtn = Button("  Back  ", screen.ExitLoopClosure());
+
+    auto layout = Container::Vertical({
+        nameInput,
+        goalMenu,
+        levelMenu,
+        daysMenu,
+        durMenu,
+        limitInput,
+        Container::Horizontal({saveBtn, backBtn}),
+        });
+
+    auto renderer = Renderer(layout, [&] {
+        return vbox({
+            text(" Smart Gym Network ") | bold | color(Color::Cyan) | hcenter,
+            separator(),
+            hbox({
+                vbox({
+                    text("Name") | color(Color::Yellow),
+                    nameInput->Render() | border,
+                    text("Goal") | color(Color::Yellow),
+                    goalMenu->Render() | border,
+                    text("Level") | color(Color::Yellow),
+                    levelMenu->Render() | border,
+                }) | flex,
+                vbox({
+                    text("Days per week") | color(Color::Yellow),
+                    daysMenu->Render() | border,
+                    text("Session duration") | color(Color::Yellow),
+                    durMenu->Render() | border,
+                    text("Limitations") | color(Color::Yellow),
+                    limitInput->Render() | border,
+                }) | flex,
+            }),
+            message.empty() ? text("") : text(" " + message + " ") | color(Color::Red) | hcenter,
+            hbox({saveBtn->Render(), text("  "), backBtn->Render()}) | hcenter,
+            }) | border;
+        });
+
+    screen.Loop(renderer);
 }
 
-void recommend(const User& u) {
-    std::cout << "\n=== Workout Plan ===\n";
+void screenViewUser() {
+    auto screen = ScreenInteractive::TerminalOutput();
+    std::string name;
+    std::string message;
+    int foundIdx = -1;
 
-    if (u.goal == "muscle_gain") {
-        if (u.level == "beginner") {
-            std::cout << "Beginner Full Body\n";
-        } else if (u.level == "intermediate") {
-            std::cout << "Upper/Lower Split\n";
-        } else {
-            std::cout << "Advanced Push/Pull/Legs\n";
+    auto nameInput = Input(&name, "Enter name");
+    auto searchBtn = Button("  Search  ", [&] {
+        foundIdx = findUser(name);
+        message = foundIdx == -1 ? "User not found." : "";
+        });
+    auto backBtn = Button("  Back  ", screen.ExitLoopClosure());
+
+    auto layout = Container::Vertical({
+        nameInput,
+        Container::Horizontal({searchBtn, backBtn}),
+        });
+
+    auto renderer = Renderer(layout, [&] {
+        Elements rows;
+        rows.push_back(text(" Smart Gym — View User ") | bold | color(Color::Cyan) | hcenter);
+        rows.push_back(separator());
+        rows.push_back(text("Name") | color(Color::Yellow));
+        rows.push_back(nameInput->Render() | border);
+        rows.push_back(hbox({ searchBtn->Render(), text("  "), backBtn->Render() }) | hcenter);
+
+        if (!message.empty())
+            rows.push_back(text(" " + message + " ") | color(Color::Red) | hcenter);
+
+        if (foundIdx != -1) {
+            const User& u = users[foundIdx];
+            rows.push_back(separator());
+            rows.push_back(
+                vbox({
+                    hbox({text("Name:        ") | color(Color::Yellow), text(u.name)}),
+                    hbox({text("Goal:        ") | color(Color::Yellow), text(goalLabel(u.goal))}),
+                    hbox({text("Level:       ") | color(Color::Yellow), text(levelLabel(u.level))}),
+                    hbox({text("Days/week:   ") | color(Color::Yellow), text(std::to_string(u.daysPerWeek))}),
+                    hbox({text("Duration:    ") | color(Color::Yellow), text(std::to_string(u.durationMinutes) + " min")}),
+                    hbox({text("Limitations: ") | color(Color::Yellow), text(u.limitations)}),
+                    }) | border
+                    );
         }
-    }
-    else if (u.goal == "weight_loss") {
-        std::cout << "Fat Loss + Cardio Plan\n";
-    }
-    else {
-        std::cout << "General Fitness Plan\n";
-    }
 
-    std::cout << "Exercises: Squats, Push-ups, Row, Core\n";
+        return vbox(rows) | border;
+        });
+
+    screen.Loop(renderer);
+}
+
+void screenGetPlan() {
+    auto screen = ScreenInteractive::TerminalOutput();
+    std::string name;
+    std::string message;
+    int foundIdx = -1;
+
+    auto nameInput = Input(&name, "Enter name");
+    auto searchBtn = Button("  Get Plan  ", [&] {
+        foundIdx = findUser(name);
+        message = foundIdx == -1 ? "User not found." : "";
+        });
+    auto backBtn = Button("  Back  ", screen.ExitLoopClosure());
+
+    auto layout = Container::Vertical({
+        nameInput,
+        Container::Horizontal({searchBtn, backBtn}),
+        });
+
+    auto renderer = Renderer(layout, [&] {
+        Elements rows;
+        rows.push_back(text(" Smart Gym — Workout Plan ") | bold | color(Color::Cyan) | hcenter);
+        rows.push_back(separator());
+        rows.push_back(text("Name") | color(Color::Yellow));
+        rows.push_back(nameInput->Render() | border);
+        rows.push_back(hbox({ searchBtn->Render(), text("  "), backBtn->Render() }) | hcenter);
+
+        if (!message.empty())
+            rows.push_back(text(" " + message + " ") | color(Color::Red) | hcenter);
+
+        if (foundIdx != -1) {
+            const User& u = users[foundIdx];
+            std::string plan = recommendPlan(u);
+            rows.push_back(separator());
+            rows.push_back(
+                vbox({
+                    text("Recommended plan") | bold | color(Color::Green) | hcenter,
+                    text(" " + plan + " ") | color(Color::White) | hcenter,
+                    separator(),
+                    text("Exercises: Squats, Push-ups, Row, Core") | color(Color::GrayLight),
+                    hbox({
+                        text("Sessions: ") | color(Color::Yellow),
+                        text(std::to_string(u.daysPerWeek) + "x / week, " + std::to_string(u.durationMinutes) + " min each"),
+                    }),
+                    }) | border
+                    );
+        }
+
+        return vbox(rows) | border;
+        });
+
+    screen.Loop(renderer);
+}
+
+void screenAllUsers() {
+    auto screen = ScreenInteractive::TerminalOutput();
+    auto backBtn = Button("  Back  ", screen.ExitLoopClosure());
+
+    auto renderer = Renderer(backBtn, [&] {
+        Elements rows;
+        rows.push_back(text(" Smart Gym — All Users ") | bold | color(Color::Cyan) | hcenter);
+        rows.push_back(separator());
+
+        if (users.empty()) {
+            rows.push_back(text("No users yet.") | color(Color::GrayLight) | hcenter);
+        }
+        else {
+            for (int i = 0; i < (int)users.size(); i++) {
+                rows.push_back(hbox({
+                    text(std::to_string(i + 1) + ".  ") | color(Color::Yellow),
+                    text(users[i].name) | bold,
+                    text("  —  ") | color(Color::GrayLight),
+                    text(goalLabel(users[i].goal)) | color(Color::Cyan),
+                    text("  ·  ") | color(Color::GrayLight),
+                    text(levelLabel(users[i].level)) | color(Color::GrayLight),
+                    }));
+            }
+        }
+
+        rows.push_back(separator());
+        rows.push_back(backBtn->Render() | hcenter);
+        return vbox(rows) | border;
+        });
+
+    screen.Loop(renderer);
 }
 
 int main() {
-    std::vector<User> users;
-    int choice;
+    auto screen = ScreenInteractive::TerminalOutput();
+
+    int menuSel = 0;
+    std::vector<std::string> entries = {
+        "  Create user  ",
+        "  View user    ",
+        "  Get plan     ",
+        "  All users    ",
+        "  Exit         ",
+    };
+
+    auto menu = Menu(&entries, &menuSel);
+    auto enterBtn = Button("  Enter  ", [&] {
+        screen.ExitLoopClosure()();
+        });
+
+    auto layout = Container::Vertical({ menu, enterBtn });
+
+    auto renderer = Renderer(layout, [&] {
+        return vbox({
+            text(" Smart Gym Network ") | bold | color(Color::Cyan) | hcenter,
+            text("Workout plan generator") | color(Color::GrayLight) | hcenter,
+            separator(),
+            menu->Render() | border,
+            enterBtn->Render() | hcenter,
+            }) | border;
+        });
 
     while (true) {
-        std::cout << "\n=== Smart Gym Network ===\n";
-        std::cout << "1. Create user\n";
-        std::cout << "2. View user\n";
-        std::cout << "3. Get plan\n";
-        std::cout << "4. Show all users\n";
-        std::cout << "5. Exit\n";
-        std::cout << "Choose: ";
-
-        std::cin >> choice;
-
-        if (std::cin.fail()) {
-            clearInput();
-            std::cout << "Enter number 1-5.\n";
-            continue;
-        }
-
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-        if (choice == 1) {
-            User u;
-
-            u.name = inputNonEmpty("Name: ");
-
-            if (findUser(users, u.name) != -1) {
-                std::cout << "User already exists.\n";
-                continue;
-            }
-
-            u.goal = inputGoal();
-            u.level = inputLevel();
-            u.daysPerWeek = inputInt("Days per week (1-7): ", 1, 7);
-            u.durationMinutes = inputInt("Duration (10-180): ", 10, 180);
-            u.limitations = inputNonEmpty("Limitations (or 'none'): ");
-
-            users.push_back(u);
-
-            std::cout << "\nUser created successfully.\n";
-        }
-        else if (choice == 2) {
-            std::string name = inputNonEmpty("Enter name: ");
-            int i = findUser(users, name);
-
-            if (i == -1) std::cout << "User not found.\n";
-            else printUser(users[i]);
-        }
-        else if (choice == 3) {
-            std::string name = inputNonEmpty("Enter name: ");
-            int i = findUser(users, name);
-
-            if (i == -1) std::cout << "User not found.\n";
-            else recommend(users[i]);
-        }
-        else if (choice == 4) {
-            if (users.empty()) {
-                std::cout << "No users.\n";
-            } else {
-                std::cout << "\n=== All Users ===\n";
-                for (int i = 0; i < users.size(); i++) {
-                    std::cout << i + 1 << ". " << users[i].name << "\n";
-                }
-            }
-        }
-        else if (choice == 5) {
-            std::cout << "Goodbye!\n";
-            break;
-        }
-        else {
-            std::cout << "Invalid option.\n";
-        }
+        screen.Loop(renderer);
+        if (menuSel == 0) screenCreateUser();
+        else if (menuSel == 1) screenViewUser();
+        else if (menuSel == 2) screenGetPlan();
+        else if (menuSel == 3) screenAllUsers();
+        else { break; }
     }
 
     return 0;
