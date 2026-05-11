@@ -12,12 +12,20 @@ FetchContent_Declare(ftxui
 
 FetchContent_MakeAvailable(ftxui)
 
-add_executable(Gymgym
+add_executable(GymgymClient
     client/main.cpp
 )
 
-target_link_libraries(Gymgym
+target_link_libraries(GymgymClient
     ftxui::component
     ftxui::dom
     ftxui::screen
 )
+
+add_executable(GymgymServer
+    src/main.cpp
+    src/Server.cpp
+    src/RequestHandler.cpp
+)
+
+target_include_directories(GymgymServer PRIVATE include)

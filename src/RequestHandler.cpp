@@ -59,5 +59,17 @@ std::string RequestHandler::handleRequest(const std::string& request, ClientSess
         return "OK Logged out\n";
     }
 
+    if (command == "CREATE_USER") {
+        return "OK User created\n";
+    }
+
+    if (command == "GET_USER") {
+        return "OK User data\n";
+    }
+
+    if (command == "GET_PLAN") {
+        return "OK Beginner Full Body\n";
+    }
+
     return "ERROR Unknown command\n";
 }
