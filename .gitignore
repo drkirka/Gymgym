@@ -3,7 +3,13 @@ out/
 x64/
 *.user
 
+*.sln
+*.slnx
+*.vcxproj
+*.filters
+
 database/data/
 database/backups/
 database/init/
+
 *.exe

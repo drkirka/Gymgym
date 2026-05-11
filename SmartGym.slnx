@@ -1,7 +1,0 @@
-<Solution>
-  <Configurations>
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="SmartGym.vcxproj" Id="403a6ea3-b12e-453f-8271-57ddccad9ef5" />
-</Solution>
