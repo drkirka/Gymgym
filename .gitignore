@@ -2,3 +2,8 @@
 out/
 x64/
 *.user
+
+database/data/
+database/backups/
+database/init/
+*.exe
