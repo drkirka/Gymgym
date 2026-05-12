@@ -15,11 +15,11 @@ WORKDIR /src
 COPY . /src
 
 # Build only the server target, skip client to avoid ftxui FetchContent overhead
-RUN cmake -S . -B build-server -DCMAKE_BUILD_TYPE=Release \
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_C_COMPILER=/usr/local/bin/gcc \
     -DCMAKE_CXX_COMPILER=/usr/local/bin/g++ \
     -DBUILD_CLIENT=OFF \
-    && cmake --build build-server --target GymgymServer -j$(nproc)
+    && cmake --build build --target GymgymServer -j$(nproc)
 
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
@@ -27,6 +27,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 ca-certificates libstdc++6 libodb-2.4 libodb-pgsql-2.4 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /src/build-server/GymgymServer /usr/local/bin/GymgymServer
+COPY --from=builder /src/build/server/GymgymServer /usr/local/bin/GymgymServer
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/GymgymServer"]
