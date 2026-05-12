@@ -11,5 +11,8 @@ x64/
 database/data/
 database/backups/
 database/init/
+build/
+
+server/db/data/
 
 *.exe

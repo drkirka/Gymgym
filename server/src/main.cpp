@@ -1,4 +1,4 @@
-#include "Server.h"
+#include "server/core/server.h"
 
 int main() {
     Server server(8080);

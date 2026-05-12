@@ -1,14 +1,15 @@
-#include "Server.h"
-#include "RequestHandler.h"
-#include "Session.h"
-#include <iostream>
-#include <cstring>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>
-#include <thread>
+#include "server/core/server.h"
+#include "server/core/request_handler.h"
+#include "server/core/session.h"
 
-Server::Server(int port) :port(port), serverSocket(-1), activeClients(0) {}
+#include <cstring>
+#include <iostream>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <thread>
+#include <unistd.h>
+
+Server::Server(int port) : port(port), serverSocket(-1), activeClients(0) {}
 
 Server::~Server() {
     if (serverSocket != -1) {
@@ -89,8 +90,7 @@ void Server::handleClient(int clientSocket) {
         if (request.find("SERVER_STATUS") == 0) {
             std::lock_guard<std::mutex> lock(clientsMutex);
             response = "OK Active clients: " + std::to_string(activeClients) + "\n";
-        }
-        else {
+        } else {
             response = handler.handleRequest(request, session);
         }
 

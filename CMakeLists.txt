@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 project(Gymgym)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
@@ -12,20 +13,13 @@ FetchContent_Declare(ftxui
 
 FetchContent_MakeAvailable(ftxui)
 
-add_executable(GymgymClient
-    client/main.cpp
-)
+option(BUILD_CLIENT "Build client" ON)
+option(BUILD_SERVER "Build server" ON)
 
-target_link_libraries(GymgymClient
-    ftxui::component
-    ftxui::dom
-    ftxui::screen
-)
+if(BUILD_CLIENT)
+    add_subdirectory(client)
+endif()
 
-add_executable(GymgymServer
-    src/main.cpp
-    src/Server.cpp
-    src/RequestHandler.cpp
-)
-
-target_include_directories(GymgymServer PRIVATE include)
+if(BUILD_SERVER)
+    add_subdirectory(server)
+endif()
