@@ -16,3 +16,4 @@ build/
 server/db/data/
 
 *.exe
+build-client/
