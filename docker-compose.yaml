@@ -10,6 +10,7 @@ services:
       - "5432:5432"
     volumes:
       - ./server/db/data:/var/lib/postgresql/data
+      - ./server/db/init:/docker-entrypoint-initdb.d
 
   adminer:
     image: adminer
