@@ -83,12 +83,16 @@ add_custom_target(odb_generated
         ${ODB_SCHEMA_FILE}
 )
 
+file(GLOB REPOSITORY_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/repository/*Repository.cpp
+)
+
 add_executable(GymgymServer
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/server.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/request_handler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/db/Database.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/db/UserRepository.cpp
+    ${REPOSITORY_SOURCES}
     ${ODB_GENERATED_SOURCES}
 )
 
@@ -98,6 +102,7 @@ target_include_directories(GymgymServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/model
     ${CMAKE_CURRENT_SOURCE_DIR}/include/db
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/repository
     ${ODB_GENERATED_DIR}
 )
 
@@ -111,6 +116,7 @@ target_link_libraries(GymgymServer
 add_executable(PrintUserRecords
     ${CMAKE_CURRENT_SOURCE_DIR}/src/db/Database.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tests/print_user_records.cpp
+    ${REPOSITORY_SOURCES}
     ${ODB_GENERATED_SOURCES}
 )
 
@@ -124,6 +130,7 @@ target_include_directories(PrintUserRecords PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/model
     ${CMAKE_CURRENT_SOURCE_DIR}/include/db
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/repository
     ${ODB_GENERATED_DIR}
 )
 
