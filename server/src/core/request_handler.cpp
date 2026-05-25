@@ -2,7 +2,9 @@
 
 #include <sstream>
 
-std::string RequestHandler::handleRequest(const std::string& request, ClientSession& session) {
+RequestHandler::RequestHandler(GymState& gymState) : gymState(gymState) {}
+
+std::string RequestHandler::handleRequest(const std::string& request, ClientSession& session, int clientSocket) {
     std::stringstream ss(request);
     std::string command;
     ss >> command;
@@ -12,7 +14,7 @@ std::string RequestHandler::handleRequest(const std::string& request, ClientSess
     }
 
     if (command == "HELP") {
-        return "OK Commands: PING, HELP, LOGIN, PROFILE, BRANCHES, SERVER_STATUS, LOGOUT\n";
+        return "OK Commands: PING, HELP, LOGIN, PROFILE, BRANCHES, SERVER_STATUS, LIST_USERS, LOGOUT\n";
     }
 
     if (command == "LOGIN") {
@@ -25,7 +27,7 @@ std::string RequestHandler::handleRequest(const std::string& request, ClientSess
             session.isAuthenticated = true;
             session.username = username;
             session.userRole = "admin";
-
+            gymState.updateSession(clientSocket, session);      
             return "OK Admin login successful\n";
         }
 
@@ -33,7 +35,7 @@ std::string RequestHandler::handleRequest(const std::string& request, ClientSess
             session.isAuthenticated = true;
             session.username = username;
             session.userRole = "member";
-
+           gymState.updateSession(clientSocket, session);
             return "OK Member login successful\n";
         }
 
@@ -52,11 +54,24 @@ std::string RequestHandler::handleRequest(const std::string& request, ClientSess
         return "OK Klagenfurt Villach Graz\n";
     }
 
+    if (command == "SERVER_STATUS") {
+        return "OK Active clients: " + std::to_string(gymState.getActiveCount()) + "\n";
+
+    }
+
+    if (command == "LIST_USERS") {
+        if (!session.isAuthenticated || session.userRole != "admin") {
+            return "ERROR not authorized\n";
+        }
+        return "OK Active clients: " + std::to_string(gymState.getActiveCount()) + "\n";
+    }
+
     if (command == "LOGOUT") {
         session.isAuthenticated = false;
         session.username = "";
         session.userRole = "";
 
+        gymState.updateSession(clientSocket, session);
         return "OK Logged out\n";
     }
 

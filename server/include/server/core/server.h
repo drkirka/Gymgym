@@ -1,19 +1,19 @@
 #pragma once
 
-#include <mutex>
+#include <memory>
+#include "gym_state.h"
 
 class Server {
-private:
-    int port;
-    int serverSocket;
-    int activeClients;
-    std::mutex clientsMutex;
-
-    void handleClient(int clientSocket);
-
 public:
     Server(int port);
     ~Server();
 
     void start();
+
+private:
+    int port;
+    int serverSocket;
+    std::shared_ptr<GymState> gymState_;
+
+    void handleClient(int clientSocket);
 };

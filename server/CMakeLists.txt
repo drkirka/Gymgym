@@ -91,6 +91,7 @@ add_executable(GymgymServer
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/server.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/request_handler.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/gym_state.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/db/Database.cpp
     ${REPOSITORY_SOURCES}
     ${ODB_GENERATED_SOURCES}
@@ -116,6 +117,7 @@ target_link_libraries(GymgymServer
 add_executable(PrintUserRecords
     ${CMAKE_CURRENT_SOURCE_DIR}/src/db/Database.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tests/print_user_records.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/gym_state.cpp
     ${REPOSITORY_SOURCES}
     ${ODB_GENERATED_SOURCES}
 )

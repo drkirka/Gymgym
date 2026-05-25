@@ -9,7 +9,7 @@
 #include <thread>
 #include <unistd.h>
 
-Server::Server(int port) : port(port), serverSocket(-1), activeClients(0) {}
+Server::Server(int port) : port(port), serverSocket(-1), gymState_(std::make_shared<GymState>()) {}
 
 Server::~Server() {
     if (serverSocket != -1) {
@@ -62,14 +62,11 @@ void Server::start() {
 }
 
 void Server::handleClient(int clientSocket) {
-    {
-        std::lock_guard<std::mutex> lock(clientsMutex);
-        activeClients++;
-        std::cout << "Active clients: " << activeClients << std::endl;
-    }
-
+        gymState_->addClient(clientSocket);
+        std::cout << "Active clients: " << gymState_->getActiveCount() << std::endl;
+  
     ClientSession session;
-    RequestHandler handler;
+    RequestHandler handler(*gymState_);
 
     while (true) {
         char buffer[1024];
@@ -85,27 +82,17 @@ void Server::handleClient(int clientSocket) {
         std::cout << "Received: " << buffer << std::endl;
 
         std::string request(buffer);
-        std::string response;
-
-        if (request.find("SERVER_STATUS") == 0) {
-            std::lock_guard<std::mutex> lock(clientsMutex);
-            response = "OK Active clients: " + std::to_string(activeClients) + "\n";
-        } else {
-            response = handler.handleRequest(request, session);
-        }
+        std::string response = handler.handleRequest(request, session, clientSocket);
 
         send(clientSocket, response.c_str(), response.size(), 0);
 
         if (request.find("LOGOUT") == 0) {
-            break;
+           break;
         }
     }
 
-    {
-        std::lock_guard<std::mutex> lock(clientsMutex);
-        activeClients--;
-        std::cout << "Active clients: " << activeClients << std::endl;
-    }
+        gymState_->removeClient(clientSocket);
+        std::cout << "Active clients: " << gymState_->getActiveCount() << std::endl;  
 
     close(clientSocket);
     std::cout << "Client session ended" << std::endl;
