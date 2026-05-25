@@ -3,7 +3,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake git pkg-config ca-certificates \
     gcc-10 g++-10 gcc-10-plugin-dev \
-    odb libodb-dev libodb-pgsql-dev libc6-dev libpq-dev \
+    odb libodb-dev libodb-pgsql-dev libodb-boost-dev \
+    libboost-dev libboost-date-time-dev \
+    libc6-dev libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CC=/usr/local/bin/gcc
@@ -24,7 +26,9 @@ RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 ca-certificates libstdc++6 libodb-2.4 libodb-pgsql-2.4 \
+    libpq5 ca-certificates libstdc++6 \
+    libodb-2.4 libodb-pgsql-2.4 libodb-boost-2.4 \
+    libboost-date-time1.74.0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/build/server/GymgymServer /usr/local/bin/GymgymServer
