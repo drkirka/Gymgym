@@ -9,7 +9,8 @@
 #include <thread>
 #include <unistd.h>
 
-Server::Server(int port) : port(port), serverSocket(-1), gymState_(std::make_shared<GymState>()) {}
+Server::Server(int port, server::db::Database& database)
+    : port(port), serverSocket(-1), gymState_(std::make_shared<GymState>()), database_(database) {}
 
 Server::~Server() {
     if (serverSocket != -1) {
@@ -66,7 +67,7 @@ void Server::handleClient(int clientSocket) {
         std::cout << "Active clients: " << gymState_->getActiveCount() << std::endl;
   
     ClientSession session;
-    RequestHandler handler(*gymState_);
+    RequestHandler handler(*gymState_, database_);
 
     while (true) {
         char buffer[1024];
