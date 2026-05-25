@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace server::db {
 
@@ -17,6 +18,7 @@ public:
     void update(const UserRecord& user);
     std::optional<UserRecord> findById(std::uint64_t id) const;
     std::optional<UserRecord> findByEmail(const std::string& email) const;
+    std::vector<UserRecord> findAll() const;
 
 private:
     Database& database_;

@@ -3,6 +3,8 @@
 #include "UserRecord-odb.hxx"
 
 #include <odb/transaction.hxx>
+#include <vector>
+#include <optional>
 
 namespace server::db {
 
@@ -29,10 +31,13 @@ std::optional<UserRecord> UserRepository::findById(std::uint64_t id) const {
     auto iterator = result.begin();
 
     if (iterator == result.end()) {
+        transaction.commit();
         return std::nullopt;
     }
 
-    return *iterator;
+    UserRecord user = *iterator;
+    transaction.commit();
+    return user;
 }
 
 std::optional<UserRecord> UserRepository::findByEmail(const std::string& email) const {
@@ -43,10 +48,27 @@ std::optional<UserRecord> UserRepository::findByEmail(const std::string& email) 
     auto iterator = result.begin();
 
     if (iterator == result.end()) {
+        transaction.commit();
         return std::nullopt;
     }
 
-    return *iterator;
+    UserRecord user = *iterator;
+    transaction.commit();
+    return user;
+}
+
+std::vector<UserRecord> UserRepository::findAll() const {
+    odb::transaction transaction(database_.native().begin());
+
+    using query = odb::query<UserRecord>;
+    auto result = database_.native().query<UserRecord>(query::true_expr);
+    std::vector<UserRecord> users;
+    for (const auto& user : result) {
+        users.push_back(user);
+    }
+
+    transaction.commit();
+    return users;
 }
 
 } // namespace server::db
