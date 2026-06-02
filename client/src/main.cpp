@@ -40,11 +40,24 @@ std::string get_env(const char* key, const char* fallback) {
     return value ? value : fallback;
 }
 
+int get_port() {
+    try {
+        return std::stoi(get_env("GYMGYM_PORT", "8080"));
+    }
+    catch (...) {
+        return 8080;
+    }
+}
+
 std::string esc(std::string s) {
     for (char& c : s) {
         if (c == ' ') c = '_';
     }
     return s;
+}
+
+bool response_ok(const std::string& response) {
+    return response.rfind("OK", 0) == 0;
 }
 
 class Net {
@@ -63,10 +76,17 @@ public:
     }
 
     ~Net() {
-        if (socket_ != badsock) close_socket(socket_);
+        disconnect_server();
 #ifdef _WIN32
         WSACleanup();
 #endif
+    }
+
+    void disconnect_server() {
+        if (socket_ != badsock) {
+            close_socket(socket_);
+            socket_ = badsock;
+        }
     }
 
     bool connect_server() {
@@ -114,8 +134,7 @@ public:
             int sent = send(socket_, data, left, 0);
 
             if (sent <= 0) {
-                close_socket(socket_);
-                socket_ = badsock;
+                disconnect_server();
                 return "ERROR Send failed\n";
             }
 
@@ -129,8 +148,7 @@ public:
         int received = recv(socket_, buffer, sizeof(buffer) - 1, 0);
 
         if (received <= 0) {
-            close_socket(socket_);
-            socket_ = badsock;
+            disconnect_server();
             return "ERROR Server disconnected\n";
         }
 
@@ -143,6 +161,9 @@ private:
     Net net_;
     std::vector<User> cache_;
     std::string message_;
+    bool logged_in_ = false;
+    std::string session_user_;
+    std::string session_role_;
 
     std::vector<std::string> goals_{
         "Muscle Gain",
@@ -182,7 +203,7 @@ public:
     App()
         : net_(
             get_env("GYMGYM_HOST", "127.0.0.1"),
-            std::stoi(get_env("GYMGYM_PORT", "8080"))) {
+            get_port()) {
     }
 
     void run() {
@@ -197,7 +218,11 @@ public:
             "Get workout plan",
             "Server status",
             "Ping server",
+            "Branches",
+            "Help",
             "Login",
+            "Profile",
+            "Logout",
             "Exit"
         };
 
@@ -211,15 +236,20 @@ public:
             });
 
         auto renderer = Renderer(container, [&] {
+            std::string session = logged_in_
+                ? "Logged in: " + session_user_ + " (" + session_role_ + ")"
+                : "Not logged in";
+
             return vbox({
                        text("Smart Gym Network") | bold | color(Color::Cyan) | hcenter,
                        text("FTXUI TCP client") | color(Color::GrayLight) | hcenter,
+                       text(session) | color(logged_in_ ? Color::Green : Color::GrayLight) | hcenter,
                        separator(),
                        menu_component->Render() | border,
                        enter->Render() | hcenter,
                        message_.empty()
                            ? text("")
-                           : paragraph(message_) | color(Color::Green) | border
+                           : paragraph(message_) | color(response_ok(message_) ? Color::Green : Color::Red) | border
                 }) |
                 border;
             });
@@ -233,7 +263,11 @@ public:
             else if (selected == 3) get_plan();
             else if (selected == 4) server_status();
             else if (selected == 5) ping();
-            else if (selected == 6) login();
+            else if (selected == 6) branches();
+            else if (selected == 7) help();
+            else if (selected == 8) login();
+            else if (selected == 9) profile();
+            else if (selected == 10) logout();
             else break;
         }
     }
@@ -369,7 +403,7 @@ private:
 
                        local_message.empty()
                            ? text("")
-                           : paragraph(local_message) | color(Color::Red) | border,
+                           : paragraph(local_message) | color(response_ok(local_message) ? Color::Green : Color::Red) | border,
 
                        hbox({
                            save->Render(),
@@ -421,7 +455,7 @@ private:
                        }) | hcenter,
                        response.empty()
                            ? text("")
-                           : paragraph(response) | border
+                           : paragraph(response) | color(response_ok(response) ? Color::Green : Color::Red) | border
                 }) |
                 border;
             });
@@ -525,7 +559,7 @@ private:
                        }) | hcenter,
                        response.empty()
                            ? text("")
-                           : paragraph(response) | border
+                           : paragraph(response) | color(response_ok(response) ? Color::Green : Color::Red) | border
                 }) |
                 border;
             });
@@ -539,6 +573,28 @@ private:
 
     void ping() {
         message_ = net_.send_command("PING");
+    }
+
+    void branches() {
+        message_ = net_.send_command("BRANCHES");
+    }
+
+    void help() {
+        message_ = net_.send_command("HELP");
+    }
+
+    void profile() {
+        message_ = net_.send_command("PROFILE");
+    }
+
+    void logout() {
+        message_ = net_.send_command("LOGOUT");
+        if (response_ok(message_)) {
+            logged_in_ = false;
+            session_user_.clear();
+            session_role_.clear();
+            net_.disconnect_server();
+        }
     }
 
     void login() {
@@ -561,6 +617,9 @@ private:
             message_ = response;
 
             if (response.rfind("OK", 0) == 0) {
+                logged_in_ = true;
+                session_user_ = username;
+                session_role_ = response.find("Admin") != std::string::npos ? "admin" : "member";
                 screen.ExitLoopClosure()();
             }
             });
@@ -592,7 +651,7 @@ private:
 
                        response.empty()
                            ? text("")
-                           : paragraph(response) | color(Color::Red) | border
+                           : paragraph(response) | color(response_ok(response) ? Color::Green : Color::Red) | border
                 }) |
                 border;
             });
