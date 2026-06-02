@@ -93,7 +93,7 @@ App():net(env("GYMGYM_HOST","127.0.0.1"),std::stoi(env("GYMGYM_PORT","8080"))){ 
 void run(){
 auto sc=ScreenInteractive::TerminalOutput();
 int sel=0;
-std::vector<std::string> e{"Create user","View user","Get plan","Server status","Login","Exit"};
+std::vector<std::string> e{"Create user","View user","Get plan","Server status","Ping server","Branches","Help","Login","Profile","Logout","Exit"};
 auto mn=Menu(&e,&sel);
 auto bt=Button("Enter",[&]{sc.ExitLoopClosure()();});
 auto box=Container::Vertical({mn,bt});
@@ -104,7 +104,12 @@ if(sel==0)add();
 else if(sel==1)view();
 else if(sel==2)plan();
 else if(sel==3)stat();
-else if(sel==4)login();
+else if(sel==4)msg=net.cmd("PING");
+else if(sel==5)msg=net.cmd("BRANCHES");
+else if(sel==6)msg=net.cmd("HELP");
+else if(sel==7)login();
+else if(sel==8)msg=net.cmd("PROFILE");
+else if(sel==9)msg=net.cmd("LOGOUT");
 else break;
 }
 }
