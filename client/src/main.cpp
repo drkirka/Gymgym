@@ -148,22 +148,20 @@ sc.Loop(rd);
 }
 void view(){
 auto sc=ScreenInteractive::TerminalOutput();
-std::string n,ms;
-std::optional<User> u;
+std::string n,rs;
 auto ni=Input(&n,"name");
-auto se=Button("Search",[&]{u=find(n);ms=u?"":"Not found in client cache";});
+auto se=Button("Search",[&]{
+if(n.empty()){rs="Enter name";return;}
+rs=net.cmd("GET_USER "+esc(n));
+if(rs.rfind("ERROR",0)==0){
+auto u=find(n);
+if(u)rs="OK Local copy: "+u->n+" "+u->g+" "+u->l+" "+std::to_string(u->d)+" days "+std::to_string(u->m)+" min "+u->x;
+}
+msg=rs;
+});
 auto bk=Button("Back",sc.ExitLoopClosure());
 auto ct=Container::Vertical({ni,Container::Horizontal({se,bk})});
-auto rd=Renderer(ct,[&]{
-Elements r;
-r.push_back(text("View user")|bold|color(Color::Cyan)|hcenter);
-r.push_back(separator());
-r.push_back(ni->Render()|border);
-r.push_back(hbox({se->Render(),text(" "),bk->Render()})|hcenter);
-if(!ms.empty())r.push_back(text(ms)|color(Color::Red)|hcenter);
-if(u)r.push_back(vbox({hbox({text("Name: ")|color(Color::Yellow),text(u->n)}),hbox({text("Goal: ")|color(Color::Yellow),text(u->g)}),hbox({text("Level: ")|color(Color::Yellow),text(u->l)}),hbox({text("Days: ")|color(Color::Yellow),text(std::to_string(u->d))}),hbox({text("Minutes: ")|color(Color::Yellow),text(std::to_string(u->m))}),hbox({text("Limitations: ")|color(Color::Yellow),text(u->x)})})|border);
-return vbox(r)|border;
-});
+auto rd=Renderer(ct,[&]{return vbox({text("View user")|bold|color(Color::Cyan)|hcenter,separator(),text("Name")|color(Color::Yellow),ni->Render()|border,hbox({se->Render(),text(" "),bk->Render()})|hcenter,rs.empty()?text(""):paragraph(rs)|border})|border;});
 sc.Loop(rd);
 }
 void plan(){
