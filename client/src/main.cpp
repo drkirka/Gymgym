@@ -1,194 +1,608 @@
-#include <string>
-#include <vector>
-#include <optional>
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-using Sock=SOCKET;
-const Sock badsock=INVALID_SOCKET;
-void cls(Sock s){closesocket(s);}
-#else
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netdb.h>
-using Sock=int;
-const Sock badsock=-1;
-void cls(Sock s){close(s);}
-#endif
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+using Sock = SOCKET;
+const Sock badsock = INVALID_SOCKET;
+void close_socket(Sock s) { closesocket(s); }
+#else
+#include <netdb.h>
+#include <sys/socket.h>
+#include <unistd.h>
+using Sock = int;
+const Sock badsock = -1;
+void close_socket(Sock s) { close(s); }
+#endif
 using namespace ftxui;
-struct User{std::string n,g,l,x;int d{},m{};};
-std::string env(const char* k,const char* v){auto p=std::getenv(k);return p?p:v;}
-std::string esc(std::string s){for(auto& c:s)if(c==' ')c='_';return s;}
-class Net{
-std::string h;int p;Sock fd=badsock;
-public:
-Net(std::string a,int b):h(std::move(a)),p(b){
-#ifdef _WIN32
-WSADATA w;WSAStartup(MAKEWORD(2,2),&w);
-#endif
-}
-~Net(){
-if(fd!=badsock)cls(fd);
-#ifdef _WIN32
-WSACleanup();
-#endif
-}
-Net(const Net&)=delete;
-Net& operator=(const Net&)=delete;
-Net(Net&& o)noexcept:h(std::move(o.h)),p(o.p),fd(o.fd){o.fd=badsock;}
-Net& operator=(Net&& o)noexcept{if(this!=&o){if(fd!=badsock)cls(fd);h=std::move(o.h);p=o.p;fd=o.fd;o.fd=badsock;}return *this;}
-bool con(){
-if(fd!=badsock)return true;
-addrinfo hi{},*r=nullptr;
-hi.ai_family=AF_UNSPEC;
-hi.ai_socktype=SOCK_STREAM;
-auto ps=std::to_string(p);
-if(getaddrinfo(h.c_str(),ps.c_str(),&hi,&r)!=0)return false;
-for(auto q=r;q;q=q->ai_next){
-Sock s=socket(q->ai_family,q->ai_socktype,q->ai_protocol);
-if(s==badsock)continue;
-if(connect(s,q->ai_addr,(int)q->ai_addrlen)==0){fd=s;break;}
-cls(s);
-}
-freeaddrinfo(r);
-return fd!=badsock;
-}
-std::string cmd(const std::string& s){
-if(!con())return "ERROR Client cannot connect to server\n";
-std::string a=s+"\n";
-const char* b=a.c_str();
-int l=(int)a.size();
-while(l){
-int n=send(fd,b,l,0);
-if(n<=0){cls(fd);fd=badsock;return "ERROR Send failed\n";}
-b+=n;
-l-=n;
-}
-char buf[4096];
-std::memset(buf,0,sizeof(buf));
-int n=recv(fd,buf,sizeof(buf)-1,0);
-if(n<=0){cls(fd);fd=badsock;return "ERROR Server disconnected\n";}
-return std::string(buf,n);
-}
+
+struct User {
+    std::string name;
+    std::string goal;
+    std::string level;
+    std::string limitations;
+    int days{};
+    int minutes{};
 };
-class App{
-Net net;
-std::vector<User> c;
-std::string msg;
-std::vector<std::string> g{"Muscle Gain","Weight Loss","General Fitness"};
-std::vector<std::string> gk{"muscle_gain","weight_loss","general_fitness"};
-std::vector<std::string> l{"Beginner","Intermediate","Advanced / Athlete"};
-std::vector<std::string> lk{"beginner","intermediate","advanced"};
-std::vector<std::string> ds{"1 day","2 days","3 days","4 days","5 days","6 days","7 days"};
-std::vector<std::string> du{"30 min","45 min","60 min","75 min","90 min","120 min"};
-std::vector<int> dv{30,45,60,75,90,120};
-public:
-App():net(env("GYMGYM_HOST","127.0.0.1"),std::stoi(env("GYMGYM_PORT","8080"))){ }
-void run(){
-auto sc=ScreenInteractive::TerminalOutput();
-int sel=0;
-std::vector<std::string> e{"Create user","View user","Get plan","Server status","Ping server","Branches","Help","Login","Profile","Logout","Exit"};
-auto mn=Menu(&e,&sel);
-auto bt=Button("Enter",[&]{sc.ExitLoopClosure()();});
-auto box=Container::Vertical({mn,bt});
-auto rd=Renderer(box,[&]{return vbox({text("Smart Gym Network")|bold|color(Color::Cyan)|hcenter,text("FTXUI client")|color(Color::GrayLight)|hcenter,separator(),mn->Render()|border,bt->Render()|hcenter,msg.empty()?text(""):text(msg)|color(Color::Green)|hcenter})|border;});
-while(true){
-sc.Loop(rd);
-if(sel==0)add();
-else if(sel==1)view();
-else if(sel==2)plan();
-else if(sel==3)stat();
-else if(sel==4)msg=net.cmd("PING");
-else if(sel==5)msg=net.cmd("BRANCHES");
-else if(sel==6)msg=net.cmd("HELP");
-else if(sel==7)login();
-else if(sel==8)msg=net.cmd("PROFILE");
-else if(sel==9)msg=net.cmd("LOGOUT");
-else break;
+
+std::string get_env(const char* key, const char* fallback) {
+    const char* value = std::getenv(key);
+    return value ? value : fallback;
 }
+
+std::string esc(std::string s) {
+    for (char& c : s) {
+        if (c == ' ') c = '_';
+    }
+    return s;
 }
+
+class Net {
 private:
-std::optional<User> find(const std::string& n){
-auto it=std::find_if(c.begin(),c.end(),[&](const User& u){return u.n==n;});
-if(it==c.end())return {};
-return *it;
-}
-void add(){
-auto sc=ScreenInteractive::TerminalOutput();
-std::string n,x,ms;
-int gi=0,li=0,di=2,ui=2;
-auto ni=Input(&n,"name");
-auto xi=Input(&x,"none");
-auto gm=Radiobox(&g,&gi);
-auto lm=Radiobox(&l,&li);
-auto dm=Radiobox(&ds,&di);
-auto um=Radiobox(&du,&ui);
-auto sv=Button("Save",[&]{
-if(n.empty()||x.empty()){ms="Fill all fields";return;}
-User u{n,gk[gi],lk[li],x,di+1,dv[ui]};
-std::string q="CREATE_USER "+esc(u.n)+" "+u.g+" "+u.l+" "+std::to_string(u.d)+" "+std::to_string(u.m)+" "+esc(u.x);
-ms=net.cmd(q);
-if(ms.rfind("OK",0)==0){
-auto it=std::find_if(c.begin(),c.end(),[&](const User& a){return a.n==u.n;});
-if(it==c.end())c.push_back(u);else *it=u;
-msg=ms;
-sc.ExitLoopClosure()();
-}
-});
-auto bk=Button("Back",sc.ExitLoopClosure());
-auto ct=Container::Vertical({ni,gm,lm,dm,um,xi,Container::Horizontal({sv,bk})});
-auto rd=Renderer(ct,[&]{return vbox({text("Create user")|bold|color(Color::Cyan)|hcenter,separator(),hbox({vbox({text("Name")|color(Color::Yellow),ni->Render()|border,text("Goal")|color(Color::Yellow),gm->Render()|border,text("Level")|color(Color::Yellow),lm->Render()|border})|flex,vbox({text("Days")|color(Color::Yellow),dm->Render()|border,text("Duration")|color(Color::Yellow),um->Render()|border,text("Limitations")|color(Color::Yellow),xi->Render()|border})|flex}),ms.empty()?text(""):text(ms)|color(Color::Red)|hcenter,hbox({sv->Render(),text(" "),bk->Render()})|hcenter})|border;});
-sc.Loop(rd);
-}
-void view(){
-auto sc=ScreenInteractive::TerminalOutput();
-std::string n,rs;
-auto ni=Input(&n,"name");
-auto se=Button("Search",[&]{
-if(n.empty()){rs="Enter name";return;}
-rs=net.cmd("GET_USER "+esc(n));
-if(rs.rfind("ERROR",0)==0){
-auto u=find(n);
-if(u)rs="OK Local copy: "+u->n+" "+u->g+" "+u->l+" "+std::to_string(u->d)+" days "+std::to_string(u->m)+" min "+u->x;
-}
-msg=rs;
-});
-auto bk=Button("Back",sc.ExitLoopClosure());
-auto ct=Container::Vertical({ni,Container::Horizontal({se,bk})});
-auto rd=Renderer(ct,[&]{return vbox({text("View user")|bold|color(Color::Cyan)|hcenter,separator(),text("Name")|color(Color::Yellow),ni->Render()|border,hbox({se->Render(),text(" "),bk->Render()})|hcenter,rs.empty()?text(""):paragraph(rs)|border})|border;});
-sc.Loop(rd);
-}
-void plan(){
-auto sc=ScreenInteractive::TerminalOutput();
-std::string n,rs;
-auto ni=Input(&n,"name");
-auto se=Button("Get plan",[&]{rs=net.cmd("GET_PLAN "+esc(n));msg=rs;});
-auto bk=Button("Back",sc.ExitLoopClosure());
-auto ct=Container::Vertical({ni,Container::Horizontal({se,bk})});
-auto rd=Renderer(ct,[&]{return vbox({text("Workout plan")|bold|color(Color::Cyan)|hcenter,separator(),ni->Render()|border,hbox({se->Render(),text(" "),bk->Render()})|hcenter,rs.empty()?text(""):paragraph(rs)|border})|border;});
-sc.Loop(rd);
-}
-void stat(){msg=net.cmd("SERVER_STATUS");}
-void login(){
-auto sc=ScreenInteractive::TerminalOutput();
-std::string u,p,rs;
-auto ui=Input(&u,"admin or member");
-auto pi=Input(&p,"password");
-auto ok=Button("Login",[&]{rs=net.cmd("LOGIN "+u+" "+p);msg=rs;if(rs.rfind("OK",0)==0)sc.ExitLoopClosure()();});
-auto bk=Button("Back",sc.ExitLoopClosure());
-auto ct=Container::Vertical({ui,pi,Container::Horizontal({ok,bk})});
-auto rd=Renderer(ct,[&]{return vbox({text("Login")|bold|color(Color::Cyan)|hcenter,separator(),text("Username")|color(Color::Yellow),ui->Render()|border,text("Password")|color(Color::Yellow),pi->Render()|border,hbox({ok->Render(),text(" "),bk->Render()})|hcenter,rs.empty()?text(""):text(rs)|color(Color::Red)|hcenter})|border;});
-sc.Loop(rd);
-}
+    std::string host_;
+    int port_;
+    Sock socket_ = badsock;
+
+public:
+    Net(std::string host, int port)
+        : host_(std::move(host)), port_(port) {
+#ifdef _WIN32
+        WSADATA wsa;
+        WSAStartup(MAKEWORD(2, 2), &wsa);
+#endif
+    }
+
+    ~Net() {
+        if (socket_ != badsock) close_socket(socket_);
+#ifdef _WIN32
+        WSACleanup();
+#endif
+    }
+
+    bool connect_server() {
+        if (socket_ != badsock) return true;
+
+        addrinfo hints{};
+        addrinfo* result = nullptr;
+
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+
+        std::string port_text = std::to_string(port_);
+
+        if (getaddrinfo(host_.c_str(), port_text.c_str(), &hints, &result) != 0) {
+            return false;
+        }
+
+        for (addrinfo* p = result; p != nullptr; p = p->ai_next) {
+            Sock s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+            if (s == badsock) continue;
+
+            if (connect(s, p->ai_addr, static_cast<int>(p->ai_addrlen)) == 0) {
+                socket_ = s;
+                break;
+            }
+
+            close_socket(s);
+        }
+
+        freeaddrinfo(result);
+        return socket_ != badsock;
+    }
+
+    std::string send_command(const std::string& command) {
+        if (!connect_server()) {
+            return "ERROR Cannot connect to server " + host_ + ":" +
+                std::to_string(port_) + "\n";
+        }
+
+        std::string payload = command + "\n";
+        const char* data = payload.c_str();
+        int left = static_cast<int>(payload.size());
+
+        while (left > 0) {
+            int sent = send(socket_, data, left, 0);
+
+            if (sent <= 0) {
+                close_socket(socket_);
+                socket_ = badsock;
+                return "ERROR Send failed\n";
+            }
+
+            data += sent;
+            left -= sent;
+        }
+
+        char buffer[4096];
+        std::memset(buffer, 0, sizeof(buffer));
+
+        int received = recv(socket_, buffer, sizeof(buffer) - 1, 0);
+
+        if (received <= 0) {
+            close_socket(socket_);
+            socket_ = badsock;
+            return "ERROR Server disconnected\n";
+        }
+
+        return std::string(buffer, received);
+    }
 };
-int main(){
-App a;
-a.run();
-return 0;
+
+class App {
+private:
+    Net net_;
+    std::vector<User> cache_;
+    std::string message_;
+
+    std::vector<std::string> goals_{
+        "Muscle Gain",
+        "Weight Loss",
+        "General Fitness"
+    };
+
+    std::vector<std::string> goal_keys_{
+        "muscle_gain",
+        "weight_loss",
+        "general_fitness"
+    };
+
+    std::vector<std::string> levels_{
+        "Beginner",
+        "Intermediate",
+        "Advanced / Athlete"
+    };
+
+    std::vector<std::string> level_keys_{
+        "beginner",
+        "intermediate",
+        "advanced"
+    };
+
+    std::vector<std::string> day_labels_{
+        "1 day", "2 days", "3 days", "4 days", "5 days", "6 days", "7 days"
+    };
+
+    std::vector<std::string> duration_labels_{
+        "30 min", "45 min", "60 min", "75 min", "90 min", "120 min"
+    };
+
+    std::vector<int> duration_values_{ 30, 45, 60, 75, 90, 120 };
+
+public:
+    App()
+        : net_(
+            get_env("GYMGYM_HOST", "127.0.0.1"),
+            std::stoi(get_env("GYMGYM_PORT", "8080"))) {
+    }
+
+    void run() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        int selected = 0;
+
+        std::vector<std::string> menu{
+            "Create user",
+            "Get user from server",
+            "View local cache",
+            "Get workout plan",
+            "Server status",
+            "Ping server",
+            "Login",
+            "Exit"
+        };
+
+        auto menu_component = Menu(&menu, &selected);
+        auto enter = Button("Enter", [&] {
+            screen.ExitLoopClosure()();
+            });
+        auto container = Container::Vertical({
+            menu_component,
+            enter
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                       text("Smart Gym Network") | bold | color(Color::Cyan) | hcenter,
+                       text("FTXUI TCP client") | color(Color::GrayLight) | hcenter,
+                       separator(),
+                       menu_component->Render() | border,
+                       enter->Render() | hcenter,
+                       message_.empty()
+                           ? text("")
+                           : paragraph(message_) | color(Color::Green) | border
+                }) |
+                border;
+            });
+
+        while (true) {
+            screen.Loop(renderer);
+
+            if (selected == 0) create_user();
+            else if (selected == 1) get_user_from_server();
+            else if (selected == 2) view_cache();
+            else if (selected == 3) get_plan();
+            else if (selected == 4) server_status();
+            else if (selected == 5) ping();
+            else if (selected == 6) login();
+            else break;
+        }
+    }
+
+private:
+    std::optional<User> find_cached_user(const std::string& name) {
+        auto it = std::find_if(
+            cache_.begin(),
+            cache_.end(),
+            [&](const User& user) {
+                return user.name == name;
+            });
+
+        if (it == cache_.end()) return {};
+        return *it;
+    }
+
+    void create_user() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string name;
+        std::string limitations = "none";
+        std::string local_message;
+
+        int goal_index = 0;
+        int level_index = 0;
+        int days_index = 2;
+        int duration_index = 2;
+
+        auto name_input = Input(&name, "name");
+        auto limitations_input = Input(&limitations, "none");
+
+        auto goal_box = Radiobox(&goals_, &goal_index);
+        auto level_box = Radiobox(&levels_, &level_index);
+        auto days_box = Radiobox(&day_labels_, &days_index);
+        auto duration_box = Radiobox(&duration_labels_, &duration_index);
+
+        auto save = Button("Save", [&] {
+            if (name.empty()) {
+                local_message = "ERROR Name is required";
+                return;
+            }
+
+            if (limitations.empty()) {
+                limitations = "none";
+            }
+
+            User user{
+                name,
+                goal_keys_[goal_index],
+                level_keys_[level_index],
+                limitations,
+                days_index + 1,
+                duration_values_[duration_index]
+            };
+
+            std::string command =
+                "CREATE_USER " +
+                esc(user.name) + " " +
+                user.goal + " " +
+                user.level + " " +
+                std::to_string(user.days) + " " +
+                std::to_string(user.minutes) + " " +
+                esc(user.limitations);
+
+            local_message = net_.send_command(command);
+
+            if (local_message.rfind("OK", 0) == 0) {
+                auto it = std::find_if(
+                    cache_.begin(),
+                    cache_.end(),
+                    [&](const User& existing) {
+                        return existing.name == user.name;
+                    });
+
+                if (it == cache_.end()) {
+                    cache_.push_back(user);
+                }
+                else {
+                    *it = user;
+                }
+
+                message_ = local_message;
+                screen.ExitLoopClosure()();
+            }
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto buttons = Container::Horizontal({
+            save,
+            back
+            });
+
+        auto container = Container::Vertical({
+            name_input,
+            goal_box,
+            level_box,
+            days_box,
+            duration_box,
+            limitations_input,
+            buttons
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                       text("Create user") | bold | color(Color::Cyan) | hcenter,
+                       separator(),
+
+                       hbox({
+                           vbox({
+                               text("Name") | color(Color::Yellow),
+                               name_input->Render() | border,
+
+                               text("Goal") | color(Color::Yellow),
+                               goal_box->Render() | border,
+
+                               text("Level") | color(Color::Yellow),
+                               level_box->Render() | border,
+                           }) | flex,
+
+                           vbox({
+                               text("Days per week") | color(Color::Yellow),
+                               days_box->Render() | border,
+
+                               text("Workout duration") | color(Color::Yellow),
+                               duration_box->Render() | border,
+
+                               text("Limitations") | color(Color::Yellow),
+                               limitations_input->Render() | border,
+                           }) | flex,
+                       }),
+
+                       local_message.empty()
+                           ? text("")
+                           : paragraph(local_message) | color(Color::Red) | border,
+
+                       hbox({
+                           save->Render(),
+                           text(" "),
+                           back->Render()
+                       }) | hcenter
+                }) |
+                border;
+            });
+
+        screen.Loop(renderer);
+    }
+
+    void get_user_from_server() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string name;
+        std::string response;
+
+        auto name_input = Input(&name, "name");
+
+        auto search = Button("Get user", [&] {
+            if (name.empty()) {
+                response = "ERROR Name is required";
+                return;
+            }
+
+            response = net_.send_command("GET_USER " + esc(name));
+            message_ = response;
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            name_input,
+            Container::Horizontal({search, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                       text("Get user from server") | bold | color(Color::Cyan) | hcenter,
+                       separator(),
+                       text("Name") | color(Color::Yellow),
+                       name_input->Render() | border,
+                       hbox({
+                           search->Render(),
+                           text(" "),
+                           back->Render()
+                       }) | hcenter,
+                       response.empty()
+                           ? text("")
+                           : paragraph(response) | border
+                }) |
+                border;
+            });
+
+        screen.Loop(renderer);
+    }
+
+    void view_cache() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string name;
+        std::string local_message;
+        std::optional<User> user;
+
+        auto name_input = Input(&name, "name");
+
+        auto search = Button("Search cache", [&] {
+            user = find_cached_user(name);
+            local_message = user ? "" : "Not found in local client cache";
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            name_input,
+            Container::Horizontal({search, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            Elements rows;
+
+            rows.push_back(text("View local cache") | bold | color(Color::Cyan) | hcenter);
+            rows.push_back(separator());
+            rows.push_back(name_input->Render() | border);
+
+            rows.push_back(
+                hbox({
+                    search->Render(),
+                    text(" "),
+                    back->Render()
+                    }) |
+                hcenter);
+
+            if (!local_message.empty()) {
+                rows.push_back(text(local_message) | color(Color::Red) | hcenter);
+            }
+
+            if (user) {
+                rows.push_back(
+                    vbox({
+                        hbox({text("Name: ") | color(Color::Yellow), text(user->name)}),
+                        hbox({text("Goal: ") | color(Color::Yellow), text(user->goal)}),
+                        hbox({text("Level: ") | color(Color::Yellow), text(user->level)}),
+                        hbox({text("Days: ") | color(Color::Yellow), text(std::to_string(user->days))}),
+                        hbox({text("Minutes: ") | color(Color::Yellow), text(std::to_string(user->minutes))}),
+                        hbox({text("Limitations: ") | color(Color::Yellow), text(user->limitations)}),
+                        }) |
+                        border);
+            }
+
+            return vbox(rows) | border;
+            });
+
+        screen.Loop(renderer);
+    }
+
+    void get_plan() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string name;
+        std::string response;
+
+        auto name_input = Input(&name, "name");
+
+        auto get = Button("Get plan", [&] {
+            if (name.empty()) {
+                response = "ERROR Name is required";
+                return;
+            }
+
+            response = net_.send_command("GET_PLAN " + esc(name));
+            message_ = response;
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+        auto container = Container::Vertical({
+            name_input,
+            Container::Horizontal({get, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                       text("Workout plan") | bold | color(Color::Cyan) | hcenter,
+                       separator(),
+                       text("Name") | color(Color::Yellow),
+                       name_input->Render() | border,
+                       hbox({
+                           get->Render(),
+                           text(" "),
+                           back->Render()
+                       }) | hcenter,
+                       response.empty()
+                           ? text("")
+                           : paragraph(response) | border
+                }) |
+                border;
+            });
+
+        screen.Loop(renderer);
+    }
+
+    void server_status() {
+        message_ = net_.send_command("SERVER_STATUS");
+    }
+
+    void ping() {
+        message_ = net_.send_command("PING");
+    }
+
+    void login() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string username;
+        std::string password;
+        std::string response;
+
+        auto username_input = Input(&username, "admin or member");
+        auto password_input = Input(&password, "password");
+
+        auto login_button = Button("Login", [&] {
+            if (username.empty() || password.empty()) {
+                response = "ERROR Username and password are required";
+                return;
+            }
+
+            response = net_.send_command("LOGIN " + username + " " + password);
+            message_ = response;
+
+            if (response.rfind("OK", 0) == 0) {
+                screen.ExitLoopClosure()();
+            }
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            username_input,
+            password_input,
+            Container::Horizontal({login_button, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                       text("Login") | bold | color(Color::Cyan) | hcenter,
+                       separator(),
+
+                       text("Username") | color(Color::Yellow),
+                       username_input->Render() | border,
+
+                       text("Password") | color(Color::Yellow),
+                       password_input->Render() | border,
+
+                       hbox({
+                           login_button->Render(),
+                           text(" "),
+                           back->Render()
+                       }) | hcenter,
+
+                       response.empty()
+                           ? text("")
+                           : paragraph(response) | color(Color::Red) | border
+                }) |
+                border;
+            });
+
+        screen.Loop(renderer);
+    }
+};
+
+int main() {
+    App app;
+    app.run();
+    return 0;
 }
