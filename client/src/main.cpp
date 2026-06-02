@@ -89,11 +89,11 @@ std::vector<std::string> ds{"1 day","2 days","3 days","4 days","5 days","6 days"
 std::vector<std::string> du{"30 min","45 min","60 min","75 min","90 min","120 min"};
 std::vector<int> dv{30,45,60,75,90,120};
 public:
-App():net(env("GYMGYM_HOST","127.0.0.1"),std::stoi(env("GYMGYM_PORT","8080"))){}
+App():net(env("GYMGYM_HOST","127.0.0.1"),std::stoi(env("GYMGYM_PORT","8080"))){ }
 void run(){
 auto sc=ScreenInteractive::TerminalOutput();
 int sel=0;
-std::vector<std::string> e{"Create user","View cached user","Get plan","Server status","Login","Exit"};
+std::vector<std::string> e{"Create user","View user","Get plan","Server status","Login","Exit"};
 auto mn=Menu(&e,&sel);
 auto bt=Button("Enter",[&]{sc.ExitLoopClosure()();});
 auto box=Container::Vertical({mn,bt});
@@ -151,7 +151,7 @@ auto bk=Button("Back",sc.ExitLoopClosure());
 auto ct=Container::Vertical({ni,Container::Horizontal({se,bk})});
 auto rd=Renderer(ct,[&]{
 Elements r;
-r.push_back(text("View cached user")|bold|color(Color::Cyan)|hcenter);
+r.push_back(text("View user")|bold|color(Color::Cyan)|hcenter);
 r.push_back(separator());
 r.push_back(ni->Render()|border);
 r.push_back(hbox({se->Render(),text(" "),bk->Render()})|hcenter);
