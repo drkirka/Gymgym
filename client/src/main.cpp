@@ -1,147 +1,33 @@
 #include <algorithm>
 #include <cstdlib>
-#include <cstring>
+
 #include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
+    
+#include "NetworkClient.h"
+#include "ClientApi.h"
+#include "UserDto.h"
+#include "AuthState.h"
+#include "PlanDto.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-using Sock = SOCKET;
-const Sock badsock = INVALID_SOCKET;
-void close_socket(Sock s) { closesocket(s); }
-#else
-#include <netdb.h>
-#include <sys/socket.h>
-#include <unistd.h>
-using Sock = int;
-const Sock badsock = -1;
-void close_socket(Sock s) { close(s); }
-#endif
 using namespace ftxui;
-
-struct User {
-    std::string name;
-    std::string goal;
-    std::string level;
-    std::string limitations;
-    int days{};
-    int minutes{};
-};
 
 std::string get_env(const char* key, const char* fallback) {
     const char* value = std::getenv(key);
     return value ? value : fallback;
 }
 
-std::string esc(std::string s) {
-    for (char& c : s) {
-        if (c == ' ') c = '_';
-    }
-    return s;
-}
-
-class Net {
-private:
-    std::string host_;
-    int port_;
-    Sock socket_ = badsock;
-
-public:
-    Net(std::string host, int port)
-        : host_(std::move(host)), port_(port) {
-#ifdef _WIN32
-        WSADATA wsa;
-        WSAStartup(MAKEWORD(2, 2), &wsa);
-#endif
-    }
-
-    ~Net() {
-        if (socket_ != badsock) close_socket(socket_);
-#ifdef _WIN32
-        WSACleanup();
-#endif
-    }
-
-    bool connect_server() {
-        if (socket_ != badsock) return true;
-
-        addrinfo hints{};
-        addrinfo* result = nullptr;
-
-        hints.ai_family = AF_UNSPEC;
-        hints.ai_socktype = SOCK_STREAM;
-
-        std::string port_text = std::to_string(port_);
-
-        if (getaddrinfo(host_.c_str(), port_text.c_str(), &hints, &result) != 0) {
-            return false;
-        }
-
-        for (addrinfo* p = result; p != nullptr; p = p->ai_next) {
-            Sock s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-            if (s == badsock) continue;
-
-            if (connect(s, p->ai_addr, static_cast<int>(p->ai_addrlen)) == 0) {
-                socket_ = s;
-                break;
-            }
-
-            close_socket(s);
-        }
-
-        freeaddrinfo(result);
-        return socket_ != badsock;
-    }
-
-    std::string send_command(const std::string& command) {
-        if (!connect_server()) {
-            return "ERROR Cannot connect to server " + host_ + ":" +
-                std::to_string(port_) + "\n";
-        }
-
-        std::string payload = command + "\n";
-        const char* data = payload.c_str();
-        int left = static_cast<int>(payload.size());
-
-        while (left > 0) {
-            int sent = send(socket_, data, left, 0);
-
-            if (sent <= 0) {
-                close_socket(socket_);
-                socket_ = badsock;
-                return "ERROR Send failed\n";
-            }
-
-            data += sent;
-            left -= sent;
-        }
-
-        char buffer[4096];
-        std::memset(buffer, 0, sizeof(buffer));
-
-        int received = recv(socket_, buffer, sizeof(buffer) - 1, 0);
-
-        if (received <= 0) {
-            close_socket(socket_);
-            socket_ = badsock;
-            return "ERROR Server disconnected\n";
-        }
-
-        return std::string(buffer, received);
-    }
-};
-
 class App {
 private:
-    Net net_;
-    std::vector<User> cache_;
+    NetworkClient network_;
+    ClientApi api_;
+    std::vector<UserDto> sessionHistory_;
+    AuthState auth_;
     std::string message_;
 
     std::vector<std::string> goals_{
@@ -180,9 +66,10 @@ private:
 
 public:
     App()
-        : net_(
+        : network_(
             get_env("GYMGYM_HOST", "127.0.0.1"),
-            std::stoi(get_env("GYMGYM_PORT", "8080"))) {
+            std::stoi(get_env("GYMGYM_PORT", "8080"))),
+        api_(network_) {
     }
 
     void run() {
@@ -193,7 +80,7 @@ public:
         std::vector<std::string> menu{
             "Create user",
             "Get user from server",
-            "View local cache",
+            "Session history",
             "Get workout plan",
             "Server status",
             "Ping server",
@@ -239,15 +126,15 @@ public:
     }
 
 private:
-    std::optional<User> find_cached_user(const std::string& name) {
+    std::optional<UserDto> find_cached_user(const std::string& name) {
         auto it = std::find_if(
-            cache_.begin(),
-            cache_.end(),
-            [&](const User& user) {
+            sessionHistory_.begin(),
+            sessionHistory_.end(),
+            [&](const UserDto& user) {
                 return user.name == name;
             });
 
-        if (it == cache_.end()) return {};
+        if (it == sessionHistory_.end()) return {};
         return *it;
     }
 
@@ -281,44 +168,39 @@ private:
                 limitations = "none";
             }
 
-            User user{
+            UserDto user{
                 name,
                 goal_keys_[goal_index],
                 level_keys_[level_index],
-                limitations,
                 days_index + 1,
-                duration_values_[duration_index]
+                duration_values_[duration_index],
+                limitations
             };
 
-            std::string command =
-                "CREATE_USER " +
-                esc(user.name) + " " +
-                user.goal + " " +
-                user.level + " " +
-                std::to_string(user.days) + " " +
-                std::to_string(user.minutes) + " " +
-                esc(user.limitations);
+            local_message = api_.createUser(user);
 
-            local_message = net_.send_command(command);
-
-            if (local_message.rfind("OK", 0) == 0) {
+            if (ClientApi::isOk(local_message)) {
                 auto it = std::find_if(
-                    cache_.begin(),
-                    cache_.end(),
-                    [&](const User& existing) {
+                    sessionHistory_.begin(),
+                    sessionHistory_.end(),
+                    [&](const UserDto& existing) {
                         return existing.name == user.name;
                     });
 
-                if (it == cache_.end()) {
-                    cache_.push_back(user);
+                if (it == sessionHistory_.end()) {
+                    sessionHistory_.push_back(user);
                 }
                 else {
                     *it = user;
                 }
 
-                message_ = local_message;
+                message_ =
+                    local_message +
+                    "\nWARNING Server confirmed command, but client cannot verify DB record without full GET_USER support.";
+
                 screen.ExitLoopClosure()();
             }
+
             });
 
         auto back = Button("Back", screen.ExitLoopClosure());
@@ -397,7 +279,7 @@ private:
                 return;
             }
 
-            response = net_.send_command("GET_USER " + esc(name));
+            response = api_.getUser(name);
             message_ = response;
             });
 
@@ -434,7 +316,7 @@ private:
 
         std::string name;
         std::string local_message;
-        std::optional<User> user;
+        std::optional<UserDto> user;
 
         auto name_input = Input(&name, "name");
 
@@ -453,7 +335,7 @@ private:
         auto renderer = Renderer(container, [&] {
             Elements rows;
 
-            rows.push_back(text("View local cache") | bold | color(Color::Cyan) | hcenter);
+            rows.push_back(text("Session history") | bold | color(Color::Cyan) | hcenter);
             rows.push_back(separator());
             rows.push_back(name_input->Render() | border);
 
@@ -502,7 +384,23 @@ private:
                 return;
             }
 
-            response = net_.send_command("GET_PLAN " + esc(name));
+            PlanDto plan = api_.getPlan(name);
+            response = plan.rawResponse;
+
+            if (plan.rawResponse.rfind("ERROR", 0) == 0) {
+                response = plan.rawResponse;
+            }
+            else if (plan.plans.empty()) {
+                response = plan.rawResponse + "\n\nNo parsed plans found.";
+            }
+            else {
+                response = "Server response:\n" + plan.rawResponse + "\n\nParsed plans:\n";
+
+                for (size_t i = 0; i < plan.plans.size(); ++i) {
+                    response += std::to_string(i + 1) + ". " + plan.plans[i] + "\n";
+                }
+            }
+
             message_ = response;
             });
 
@@ -534,11 +432,11 @@ private:
     }
 
     void server_status() {
-        message_ = net_.send_command("SERVER_STATUS");
+        message_ = api_.serverStatus();
     }
 
     void ping() {
-        message_ = net_.send_command("PING");
+        message_ = api_.ping();
     }
 
     void login() {
@@ -557,10 +455,20 @@ private:
                 return;
             }
 
-            response = net_.send_command("LOGIN " + username + " " + password);
+            response = api_.login(username, password);
             message_ = response;
 
-            if (response.rfind("OK", 0) == 0) {
+            if (ClientApi::isOk(response)) {
+                auth_.loggedIn = true;
+                auth_.username = username;
+
+                if (username == "admin") {
+                    auth_.role = "admin";
+                }
+                else {
+                    auth_.role = "member";
+                }
+
                 screen.ExitLoopClosure()();
             }
             });
