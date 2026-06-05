@@ -18,7 +18,7 @@ services:
       - db
     ports:
       - 9090:8080
-      
+
   server:
     build:
       context: .
@@ -39,7 +39,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.client
+    depends_on:
+      - server
+    environment:
+      GYMGYM_HOST: server
+      GYMGYM_PORT: 8080
     tty: true
     stdin_open: true
-
-

@@ -1,13 +1,18 @@
 #pragma once
 
+#include <string>
+
 #include "NetworkClient.h"
 #include "UserDto.h"
 #include "PlanDto.h"
-#include <string>
 
 class ClientApi {
 public:
     explicit ClientApi(NetworkClient& network);
+
+    std::string help();
+    std::string branches();
+
     std::string login(const std::string& username, const std::string& password);
     std::string logout();
     std::string createUser(const UserDto& user);

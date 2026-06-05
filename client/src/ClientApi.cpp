@@ -6,6 +6,14 @@ ClientApi::ClientApi(NetworkClient& network)
     : network_(network) {
 }
 
+std::string ClientApi::help() {
+    return network_.sendCommand("HELP");
+}
+
+std::string ClientApi::branches() {
+    return network_.sendCommand("BRANCHES");
+}
+
 std::string ClientApi::escapeArg(std::string value) {
     for (char& c : value) {
         if (c == ' ') c = '_';

@@ -51,7 +51,17 @@ void NetworkClient::disconnect() {
 }
 
 bool NetworkClient::connectToServer() {
-    if (socket_ != badsock) return true;
+    bool NetworkClient::connectToServer() {
+        if (socket_ != badsock) return true;
+
+        for (int attempt = 0; attempt < 5; ++attempt) {
+            if (tryConnectOnce()) {
+                return true;
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+
+        return false;
 
     addrinfo hints{};
     addrinfo* result = nullptr;
@@ -83,6 +93,12 @@ bool NetworkClient::connectToServer() {
 
 std::string NetworkClient::sendCommand(const std::string& command) {
     if (!connectToServer()) {
+        //cleaner ui
+        while (!response.empty() &&
+            (response.back() == '\n' || response.back() == '\r')) {
+            response.pop_back();
+        }
+        return response;
         return "ERROR Server unavailable at " + host_ + ":" + std::to_string(port_);
     }
 
@@ -109,6 +125,17 @@ std::string NetworkClient::sendCommand(const std::string& command) {
         std::memset(buffer, 0, sizeof(buffer));
 
         int received = recv(socket_, buffer, sizeof(buffer) - 1, 0);
+        timeval timeout{};
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 0;
+
+        setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO,
+            reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+
+        setsockopt(socket_, SOL_SOCKET, SO_SNDTIMEO,
+            reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+        //add for windows too? have win32 branch= mlsec through DWORD
+        // helper setSocketTimeouts(socket_).
 
         if (received <= 0) {
             disconnect();

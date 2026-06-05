@@ -22,6 +22,23 @@ std::string get_env(const char* key, const char* fallback) {
     return value ? value : fallback;
 }
 
+int get_env_int(const char* key, int fallback) {
+    const char* value = std::getenv(key);
+    if (!value) return fallback;
+
+    try {
+        return std::stoi(value);
+    }
+    catch (...) {
+        return fallback;
+    }
+}
+
+bool is_safe_token(const std::string& value) {
+    return !value.empty() &&
+        value.find_first_of(" \t\r\n|") == std::string::npos;
+}
+
 class App {
 private:
     NetworkClient network_;
@@ -68,7 +85,8 @@ public:
     App()
         : network_(
             get_env("GYMGYM_HOST", "127.0.0.1"),
-            std::stoi(get_env("GYMGYM_PORT", "8080"))),
+            get_env_int("GYMGYM_PORT", 8080)
+        ),
         api_(network_) {
     }
 
@@ -79,12 +97,14 @@ public:
 
         std::vector<std::string> menu{
             "Create user",
-            "Get user from server",
+            "Raw GET_USER request",
             "Session history",
             "Get workout plan",
             "Server status",
             "Ping server",
             "Login",
+            "Logout",
+            "Profile",
             "Exit"
         };
 
@@ -100,6 +120,11 @@ public:
         auto renderer = Renderer(container, [&] {
             return vbox({
                        text("Smart Gym Network") | bold | color(Color::Cyan) | hcenter,
+                      
+                       text("Target: " + network_.host() + ":" + std::to_string(network_.port()))
+                        | color(Color::GrayLight)
+                        | hcenter,
+
                        text("FTXUI TCP client") | color(Color::GrayLight) | hcenter,
                        separator(),
                        menu_component->Render() | border,
@@ -121,11 +146,30 @@ public:
             else if (selected == 4) server_status();
             else if (selected == 5) ping();
             else if (selected == 6) login();
+            else if (selected == 7) logout();
+            else if (selected == 8) profile();
             else break;
         }
     }
 
 private:
+    
+    void profile() {
+        if (!auth_.loggedIn) {
+            message_ = "ERROR Not logged in locally. Use Login first.";
+            return;
+        }
+
+        message_ = api_.profile();
+    }
+
+    void logout() {
+        std::string response = api_.logout();
+        message_ = response;
+
+        auth_ = AuthState{};
+    }
+
     std::optional<UserDto> find_cached_user(const std::string& name) {
         auto it = std::find_if(
             sessionHistory_.begin(),
@@ -137,8 +181,8 @@ private:
         if (it == sessionHistory_.end()) return {};
         return *it;
     }
-
     void create_user() {
+        
         auto screen = ScreenInteractive::TerminalOutput();
 
         std::string name;
@@ -164,8 +208,18 @@ private:
                 return;
             }
 
+            if (!is_safe_token(name)) {
+                local_message = "ERROR Name must not contain spaces or special characters";
+                return;
+            }
+
             if (limitations.empty()) {
                 limitations = "none";
+            }
+
+            if (!is_safe_token(limitations)) {
+                local_message = "ERROR Limitations must not contain spaces or special characters";
+                return;
             }
 
             UserDto user{
@@ -196,9 +250,13 @@ private:
 
                 message_ =
                     local_message +
-                    "\nWARNING Server confirmed command, but client cannot verify DB record without full GET_USER support.";
-
+                    "\nWARNING: This confirms only that server accepted CREATE_USER command."
+                    "\nCurrent server does not return saved user data.";
                 screen.ExitLoopClosure()();
+            }
+
+            else {
+                message_ = local_message;
             }
 
             });
@@ -292,8 +350,9 @@ private:
 
         auto renderer = Renderer(container, [&] {
             return vbox({
-                       text("Get user from server") | bold | color(Color::Cyan) | hcenter,
+                       text("Raw GET_USER request") | bold | color(Color::Cyan) | hcenter,
                        separator(),
+                       text("Current server returns a placeholder response, not full user data.") | color(Color::GrayLight),
                        text("Name") | color(Color::Yellow),
                        name_input->Render() | border,
                        hbox({
@@ -337,6 +396,11 @@ private:
 
             rows.push_back(text("Session history") | bold | color(Color::Cyan) | hcenter);
             rows.push_back(separator());
+            rows.push_back(
+                text("Local client cache only. Not server database.")
+                | color(Color::GrayLight)
+                | hcenter
+            );
             rows.push_back(name_input->Render() | border);
 
             rows.push_back(
@@ -442,12 +506,16 @@ private:
     void login() {
         auto screen = ScreenInteractive::TerminalOutput();
 
+
         std::string username;
         std::string password;
         std::string response;
 
         auto username_input = Input(&username, "admin or member");
-        auto password_input = Input(&password, "password");
+
+        InputOption password_option;
+        password_option.password = true;
+        auto password_input = Input(&password, "password", password_option);
 
         auto login_button = Button("Login", [&] {
             if (username.empty() || password.empty()) {
@@ -455,22 +523,38 @@ private:
                 return;
             }
 
+            if (!is_safe_token(username)) {
+                response = "ERROR Username must not contain spaces or special characters";
+                return;
+            }
+
+            if (password.find_first_of(" \t\r\n") != std::string::npos) {
+                response = "ERROR Password must not contain whitespace";
+                return;
+            }
+
             response = api_.login(username, password);
             message_ = response;
 
-            if (ClientApi::isOk(response)) {
-                auth_.loggedIn = true;
-                auth_.username = username;
-
-                if (username == "admin") {
-                    auth_.role = "admin";
-                }
-                else {
-                    auth_.role = "member";
-                }
-
-                screen.ExitLoopClosure()();
+            if (!ClientApi::isOk(response)) {
+                return;
             }
+
+            auth_.loggedIn = true;
+            auth_.username = username;
+
+            if (response.find("Admin") != std::string::npos) {
+                auth_.role = "admin";
+            }
+            else if (response.find("Member") != std::string::npos) {
+                auth_.role = "member";
+            }
+            else {
+                auth_.role = "unknown";
+            }
+
+            password.clear();
+            screen.ExitLoopClosure()();
             });
 
         auto back = Button("Back", screen.ExitLoopClosure());
