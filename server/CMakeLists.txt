@@ -104,6 +104,10 @@ target_include_directories(GymgymServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include/model
     ${CMAKE_CURRENT_SOURCE_DIR}/include/db
     ${CMAKE_CURRENT_SOURCE_DIR}/include/repository
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/server
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/server/network
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/server/handler
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/server/service
     ${ODB_GENERATED_DIR}
 )
 
