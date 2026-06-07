@@ -25,5 +25,7 @@ private:
     int port_;
     Sock socket_;
 
+    bool tryConnectOnce();
+
     void disconnect();
 };

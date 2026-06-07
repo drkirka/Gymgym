@@ -36,7 +36,7 @@ int get_env_int(const char* key, int fallback) {
 
 bool is_safe_token(const std::string& value) {
     return !value.empty() &&
-        value.find_first_of(" \t\r\n|") == std::string::npos;
+        value.find_first_of("\t\r\n|") == std::string::npos;
 }
 
 class App {
