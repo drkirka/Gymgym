@@ -10,12 +10,12 @@ COPY . /src
 
 # Build only the client target, skip server to avoid odb dependency
 RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SERVER=OFF \
-    && cmake --build build --target GymgymClient -j$(nproc)
+    && cmake --build build --target gymgym_client -j$(nproc)
 
 FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /src/build/client/GymgymClient /usr/local/bin/GymgymClient
-ENTRYPOINT ["/usr/local/bin/GymgymClient"]
+COPY --from=builder /src/build/client/gymgym_client /usr/local/bin/gymgym_client
+ENTRYPOINT ["/usr/local/bin/gymgym_client"]
