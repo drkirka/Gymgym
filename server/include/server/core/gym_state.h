@@ -2,6 +2,8 @@
 
 #include <map>
 #include <mutex>
+#include <string>
+#include <vector>
 #include "session.h"
 
 class GymState {
@@ -11,6 +13,7 @@ public:
     void updateSession(int socket, const ClientSession& session);
     ClientSession getSession(int socket) const;
     int getActiveCount() const;
+    std::vector<std::string> getActiveUsernames() const;
 
 private:
     std::map<int, ClientSession> clients_;

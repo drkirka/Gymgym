@@ -28,3 +28,14 @@ int GymState::getActiveCount() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return static_cast<int>(clients_.size());
 }
+
+std::vector<std::string> GymState::getActiveUsernames() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<std::string> usernames;
+    for (const auto& pair : clients_) {
+        if (!pair.second.username.empty()) {
+            usernames.push_back(pair.second.username);
+        }
+    }
+    return usernames;
+}
