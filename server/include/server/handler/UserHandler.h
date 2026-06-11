@@ -1,24 +1,20 @@
 #pragma once
 
-#include <optional>
 #include <string>
-#include <vector>
 
-#include "db/Database.h"
-#include "repository/UserRepository.h"
-#include "model/UserRecord.h"
+#include "server/core/session.h"
+#include "server/service/UserService.h"
 
-namespace server::service {
+namespace server::handler {
 
-    class UserService {
+    class UserHandler {
     public:
-        explicit UserService(server::db::Database& database);
+        explicit UserHandler(server::service::UserService& userService);
 
-        std::optional<server::db::UserRecord> findByName(const std::string& name) const;
-        std::vector<server::db::UserRecord> findAll() const;
+        std::string getUser(const std::string& name, const ClientSession& session);
 
     private:
-        server::db::UserRepository userRepository_;
-    }; 
+        server::service::UserService& userService_;
+    };
 
-}
+} // namespace server::handler 
