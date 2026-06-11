@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     odb libodb-dev libodb-pgsql-dev libodb-boost-dev \
     libboost-dev libboost-date-time-dev \
     libc6-dev libpq-dev \
+    nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CC=/usr/local/bin/gcc
