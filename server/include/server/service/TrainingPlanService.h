@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "db/Database.h"
@@ -19,4 +20,4 @@ namespace server::service {
         server::db::TrainingPlanRepository planRepository_;
     };
 
-} 
+}  // namespace server::service

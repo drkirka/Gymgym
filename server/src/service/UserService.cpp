@@ -26,4 +26,4 @@ std::vector<server::db::UserRecord> UserService::findAll() const {
     return userRepository_.findAll();
 }
 
-}
+} // namespace server::service

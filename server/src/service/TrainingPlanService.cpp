@@ -13,4 +13,4 @@ std::vector<server::db::TrainingPlanRecord> TrainingPlanService::findPublic() co
     return planRepository_.findPublicTrainingPlans();
 }
 
-} 
+}  // namespace server::service

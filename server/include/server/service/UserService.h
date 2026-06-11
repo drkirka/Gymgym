@@ -21,4 +21,4 @@ namespace server::service {
         server::db::UserRepository userRepository_;
     };
 
-} 
+}  // namespace server::service
