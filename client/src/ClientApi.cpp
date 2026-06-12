@@ -1,101 +1,125 @@
 #include "ClientApi.h"
 
-#include <sstream>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
+
+namespace {
+std::string makeCommand(const json& request) {
+    return request.dump();
+}
+
+json parseResponse(const std::string& response) {
+    return json::parse(response);
+}
+
+bool hasStatus(const std::string& response, const std::string& status) {
+    try {
+        json parsed = parseResponse(response);
+        return parsed.contains("status") && parsed["status"].is_string() && parsed["status"] == status;
+    }
+    catch (...) {
+        return false;
+    }
+}
+}
 
 ClientApi::ClientApi(NetworkClient& network)
     : network_(network) {
 }
 
 std::string ClientApi::help() {
-    return network_.sendCommand("HELP");
+    return network_.sendCommand(makeCommand({ {"command", "HELP"} }));
 }
 
 std::string ClientApi::branches() {
-    return network_.sendCommand("BRANCHES");
+    return network_.sendCommand(makeCommand({ {"command", "BRANCHES"} }));
 }
+
 std::string ClientApi::listUsers() {
-    return network_.sendCommand("LIST_USERS");
-}
-std::string ClientApi::escapeArg(std::string value) {
-    for (char& c : value) {
-        if (c == ' ') c = '_';
-    }
-    return value;
+    return network_.sendCommand(makeCommand({ {"command", "LIST_USERS"} }));
 }
 
 std::string ClientApi::login(const std::string& username, const std::string& password) {
-    return network_.sendCommand("LOGIN " + escapeArg(username) + " " + escapeArg(password));
+    return network_.sendCommand(makeCommand({
+        {"command", "LOGIN"},
+        {"username", username},
+        {"password", password}
+    }));
 }
 
 std::string ClientApi::logout() {
-    return network_.sendCommand("LOGOUT");
+    return network_.sendCommand(makeCommand({ {"command", "LOGOUT"} }));
 }
 
 std::string ClientApi::createUser(const UserDto& user) {
-    std::string command =
-        "CREATE_USER " +
-        escapeArg(user.name) + " " +
-        escapeArg(user.goal) + " " +
-        escapeArg(user.level) + " " +
-        std::to_string(user.days) + " " +
-        std::to_string(user.minutes) + " " +
-        escapeArg(user.limitations);
-
-    return network_.sendCommand(command);
+    return network_.sendCommand(makeCommand({
+        {"command", "CREATE_USER"},
+        {"name", user.name},
+        {"goal", user.goal},
+        {"level", user.level},
+        {"days", user.days},
+        {"minutes", user.minutes},
+        {"limitations", user.limitations}
+    }));
 }
 
 std::string ClientApi::getUser(const std::string& name) {
-    return network_.sendCommand("GET_USER " + escapeArg(name));
+    return network_.sendCommand(makeCommand({
+        {"command", "GET_USER"},
+        {"name", name}
+    }));
 }
 
-PlanDto ClientApi::getPlan(const std::string& name) {
-    std::string response = network_.sendCommand("GET_PLAN " + escapeArg(name));
+PlanDto ClientApi::getPlan() {
+    std::string response = network_.sendCommand(makeCommand({ {"command", "GET_PLAN"} }));
     return parsePlanResponse(response);
 }
 
 std::string ClientApi::serverStatus() {
-    return network_.sendCommand("SERVER_STATUS");
+    return network_.sendCommand(makeCommand({ {"command", "SERVER_STATUS"} }));
 }
 
 std::string ClientApi::ping() {
-    return network_.sendCommand("PING");
+    return network_.sendCommand(makeCommand({ {"command", "PING"} }));
 }
 
 std::string ClientApi::profile() {
-    return network_.sendCommand("PROFILE");
+    return network_.sendCommand(makeCommand({ {"command", "PROFILE"} }));
 }
 
 PlanDto ClientApi::parsePlanResponse(const std::string& response) {
     PlanDto dto;
     dto.rawResponse = response;
 
-    if (response.rfind("OK", 0) != 0) {
-        return dto;
+    try {
+        json parsed = parseResponse(response);
+
+        if (!parsed.contains("status") || parsed["status"] != "OK") {
+            return dto;
+        }
+
+        if (!parsed.contains("plans") || !parsed["plans"].is_array()) {
+            return dto;
+        }
+
+        for (const auto& item : parsed["plans"]) {
+            if (item.is_string()) {
+                dto.plans.push_back(item.get<std::string>());
+            }
+        }
     }
-
-    std::string body = response.substr(2);
-
-    std::stringstream ss(body);
-    std::string item;
-
-    while (std::getline(ss, item, '|')) {
-        while (!item.empty() && item.front() == ' ') item.erase(item.begin());
-        while (!item.empty() && (item.back() == ' ' || item.back() == '\n' || item.back() == '\r')) {
-            item.pop_back();
-        }
-
-        if (!item.empty()) {
-            dto.plans.push_back(item);
-        }
+    catch (...) {
+        // Keep rawResponse only. UI can still show the server's unparsed response.
     }
 
     return dto;
 }
 
 bool ClientApi::isOk(const std::string& response) {
-    return response.rfind("OK", 0) == 0;
+    return hasStatus(response, "OK");
 }
 
 bool ClientApi::isError(const std::string& response) {
-    return response.rfind("ERROR", 0) == 0;
+    return hasStatus(response, "ERROR");
 }
