@@ -8,7 +8,7 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
-    
+
 #include "NetworkClient.h"
 #include "ClientApi.h"
 #include "UserDto.h"
@@ -121,7 +121,7 @@ public:
         auto renderer = Renderer(container, [&] {
             return vbox({
                        text("Smart Gym Network") | bold | color(Color::Cyan) | hcenter,
-                      
+
                        text("Target: " + network_.host() + ":" + std::to_string(network_.port()))
                         | color(Color::GrayLight)
                         | hcenter,
@@ -156,9 +156,6 @@ public:
 
 private:
 
-        message_ = api_.listUsers();
-    }
-
     void profile() {
         if (!auth_.loggedIn) {
             message_ = "ERROR Not logged in locally. Use Login first.";
@@ -182,9 +179,6 @@ private:
         }
     }
 
-        auth_ = AuthState{};
-    }
-
     std::optional<UserDto> find_cached_user(const std::string& name) {
         auto it = std::find_if(
             sessionHistory_.begin(),
@@ -197,7 +191,7 @@ private:
         return *it;
     }
     void create_user() {
-        
+
         auto screen = ScreenInteractive::TerminalOutput();
 
         std::string name;
@@ -364,7 +358,38 @@ private:
         auto back = Button("Back", screen.ExitLoopClosure());
 
         auto container = Container::Vertical({
-                back
+            name_input,
+            Container::Horizontal({search, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                       text("Raw GET_USER request") | bold | color(Color::Cyan) | hcenter,
+                       separator(),
+                       text("Name") | color(Color::Yellow),
+                       name_input->Render() | border,
+                       hbox({
+                           search->Render(),
+                           text(" "),
+                           back->Render()
+                       }) | hcenter,
+                       response.empty()
+                           ? text("")
+                           : paragraph(response) | border
+                }) |
+                border;
+            });
+
+        screen.Loop(renderer);
+    }
+
+    void view_cache() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            back
             });
 
         auto renderer = Renderer(container, [&] {
@@ -407,88 +432,22 @@ private:
         screen.Loop(renderer);
     }
 
-    void view_cache() {
-        auto screen = ScreenInteractive::TerminalOutput();
-
-        std::string name;
-        std::string local_message;
-        std::optional<UserDto> user;
-
-        auto name_input = Input(&name, "name");
-
-        auto search = Button("Search cache", [&] {
-            user = find_cached_user(name);
-            local_message = user ? "" : "Not found in local client cache";
-            });
-
-        auto back = Button("Back", screen.ExitLoopClosure());
-
-        auto container = Container::Vertical({
-            name_input,
-            Container::Horizontal({search, back})
-            });
-
-        auto renderer = Renderer(container, [&] {
-            Elements rows;
-
-            rows.push_back(text("Session history") | bold | color(Color::Cyan) | hcenter);
-            rows.push_back(separator());
-            rows.push_back(
-                text("Local client cache only. Not server database.")
-                | color(Color::GrayLight)
-                | hcenter
-            );
-            rows.push_back(name_input->Render() | border);
-
-            rows.push_back(
-                hbox({
-                    search->Render(),
-                    text(" "),
-                    back->Render()
-                    }) |
-                hcenter);
-
-            if (!local_message.empty()) {
-                rows.push_back(text(local_message) | color(Color::Red) | hcenter);
-            }
-
-            if (user) {
-                rows.push_back(
-                    vbox({
-                        hbox({text("Name: ") | color(Color::Yellow), text(user->name)}),
-                        hbox({text("Goal: ") | color(Color::Yellow), text(user->goal)}),
-                        hbox({text("Level: ") | color(Color::Yellow), text(user->level)}),
-                        hbox({text("Days: ") | color(Color::Yellow), text(std::to_string(user->days))}),
-                        hbox({text("Minutes: ") | color(Color::Yellow), text(std::to_string(user->minutes))}),
-                        hbox({text("Limitations: ") | color(Color::Yellow), text(user->limitations)}),
-                        }) |
-                        border);
-            }
-
-            return vbox(rows) | border;
-            });
-
-        screen.Loop(renderer);
-    }
-
     void get_plan() {
         auto screen = ScreenInteractive::TerminalOutput();
 
-        std::string name;
         std::string response;
 
-        auto name_input = Input(&name, "name");
-
         auto get = Button("Get plan", [&] {
-            if (name.empty()) {
-                response = "ERROR Name is required";
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
                 return;
             }
 
-            PlanDto plan = api_.getPlan(name);
+            PlanDto plan = api_.getPlan();
             response = plan.rawResponse;
 
-            if (plan.rawResponse.rfind("ERROR", 0) == 0) {
+            if (ClientApi::isError(plan.rawResponse)) {
                 response = plan.rawResponse;
             }
             else if (plan.plans.empty()) {
@@ -507,7 +466,6 @@ private:
 
         auto back = Button("Back", screen.ExitLoopClosure());
         auto container = Container::Vertical({
-            name_input,
             Container::Horizontal({get, back})
             });
 
@@ -515,8 +473,9 @@ private:
             return vbox({
                        text("Workout plan") | bold | color(Color::Cyan) | hcenter,
                        separator(),
-                       text("Name") | color(Color::Yellow),
-                       name_input->Render() | border,
+                       text("Plan is generated for the currently logged-in user.")
+                           | color(Color::GrayLight)
+                           | hcenter,
                        hbox({
                            get->Render(),
                            text(" "),
@@ -581,13 +540,6 @@ private:
 
             auth_.loggedIn = true;
             auth_.username = username;
-            }
-            else if (response.find("Member") != std::string::npos) {
-                auth_.role = "member";
-            }
-            else {
-                auth_.role = "unknown";
-            }
 
             password.clear();
             screen.ExitLoopClosure()();
