@@ -17,7 +17,7 @@ public:
     std::string logout();
     std::string createUser(const UserDto& user);
     std::string getUser(const std::string& name);
-    PlanDto getPlan(const std::string& name);
+    PlanDto getPlan();
     std::string serverStatus();
     std::string ping();
     std::string profile();
@@ -28,6 +28,5 @@ public:
 private:
     NetworkClient& network_;
 
-    static std::string escapeArg(std::string value);
     static PlanDto parsePlanResponse(const std::string& response);
 };
