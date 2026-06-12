@@ -12,7 +12,7 @@ public:
 
     std::string help();
     std::string branches();
-
+    std::string listUsers();
     std::string login(const std::string& username, const std::string& password);
     std::string logout();
     std::string createUser(const UserDto& user);

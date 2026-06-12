@@ -98,10 +98,11 @@ public:
         std::vector<std::string> menu{
             "Create user",
             "Raw GET_USER request",
-            "Session history",
+            "Local cache",
             "Get workout plan",
             "Server status",
             "Ping server",
+            "Branches",
             "Login",
             "Logout",
             "Profile",
@@ -145,15 +146,19 @@ public:
             else if (selected == 3) get_plan();
             else if (selected == 4) server_status();
             else if (selected == 5) ping();
-            else if (selected == 6) login();
-            else if (selected == 7) logout();
-            else if (selected == 8) profile();
+            else if (selected == 6) branches();
+            else if (selected == 7) login();
+            else if (selected == 8) logout();
+            else if (selected == 9) profile();
             else break;
         }
     }
 
 private:
-    
+
+        message_ = api_.listUsers();
+    }
+
     void profile() {
         if (!auth_.loggedIn) {
             message_ = "ERROR Not logged in locally. Use Login first.";
@@ -164,8 +169,18 @@ private:
     }
 
     void logout() {
+        if (!auth_.loggedIn) {
+            message_ = "ERROR Not logged in locally.";
+            return;
+        }
+
         std::string response = api_.logout();
         message_ = response;
+
+        if (ClientApi::isOk(response)) {
+            auth_ = AuthState{};
+        }
+    }
 
         auth_ = AuthState{};
     }
@@ -209,7 +224,7 @@ private:
             }
 
             if (!is_safe_token(name)) {
-                local_message = "ERROR Name must not contain spaces or special characters";
+                local_message = "ERROR Name must not contain special characters";
                 return;
             }
 
@@ -218,7 +233,7 @@ private:
             }
 
             if (!is_safe_token(limitations)) {
-                local_message = "ERROR Limitations must not contain spaces or special characters";
+                local_message = "ERROR Limitations must not contain special characters";
                 return;
             }
 
@@ -337,6 +352,11 @@ private:
                 return;
             }
 
+            if (!is_safe_token(name)) {
+                response = "ERROR Name must not contain spaces or special characters";
+                return;
+            }
+
             response = api_.getUser(name);
             message_ = response;
             });
@@ -344,27 +364,44 @@ private:
         auto back = Button("Back", screen.ExitLoopClosure());
 
         auto container = Container::Vertical({
-            name_input,
-            Container::Horizontal({search, back})
+                back
             });
 
         auto renderer = Renderer(container, [&] {
-            return vbox({
-                       text("Raw GET_USER request") | bold | color(Color::Cyan) | hcenter,
-                       separator(),
-                       text("Current server returns a placeholder response, not full user data.") | color(Color::GrayLight),
-                       text("Name") | color(Color::Yellow),
-                       name_input->Render() | border,
-                       hbox({
-                           search->Render(),
-                           text(" "),
-                           back->Render()
-                       }) | hcenter,
-                       response.empty()
-                           ? text("")
-                           : paragraph(response) | border
-                }) |
-                border;
+            Elements rows;
+
+            rows.push_back(text("Local cache") | bold | color(Color::Cyan) | hcenter);
+            rows.push_back(separator());
+            rows.push_back(text("Local client cache only. Not server database.")
+                | color(Color::GrayLight)
+                | hcenter);
+
+            if (sessionHistory_.empty()) {
+                rows.push_back(text("No users in local cache yet.") | color(Color::Red) | hcenter);
+            }
+            else {
+                for (size_t i = 0; i < sessionHistory_.size(); ++i) {
+                    const UserDto& user = sessionHistory_[i];
+
+                    rows.push_back(vbox({
+                        text(std::to_string(i + 1) + ".") | bold,
+                        hbox({ text("Name: ") | color(Color::Yellow), text(user.name) }),
+                        hbox({ text("Goal: ") | color(Color::Yellow), text(user.goal) }),
+                        hbox({ text("Level: ") | color(Color::Yellow), text(user.level) }),
+                        hbox({ text("Days: ") | color(Color::Yellow), text(std::to_string(user.days)) }),
+                        hbox({ text("Minutes: ") | color(Color::Yellow), text(std::to_string(user.minutes)) }),
+                        hbox({ text("Limitations: ") | color(Color::Yellow), text(user.limitations) }),
+                        }) | border);
+
+                    if (i + 1 < sessionHistory_.size()) {
+                        rows.push_back(separator());
+                    }
+                }
+            }
+
+            rows.push_back(back->Render() | hcenter);
+
+            return vbox(rows) | border;
             });
 
         screen.Loop(renderer);
@@ -502,7 +539,9 @@ private:
     void ping() {
         message_ = api_.ping();
     }
-
+    void branches() {
+        message_ = api_.branches();
+    }
     void login() {
         auto screen = ScreenInteractive::TerminalOutput();
 
@@ -542,9 +581,6 @@ private:
 
             auth_.loggedIn = true;
             auth_.username = username;
-
-            if (response.find("Admin") != std::string::npos) {
-                auth_.role = "admin";
             }
             else if (response.find("Member") != std::string::npos) {
                 auth_.role = "member";
@@ -584,7 +620,7 @@ private:
 
                        response.empty()
                            ? text("")
-                           : paragraph(response) | color(Color::Red) | border
+                           : paragraph(response) | color(ClientApi::isOk(response) ? Color::Green : Color::Red) | border
                 }) |
                 border;
             });

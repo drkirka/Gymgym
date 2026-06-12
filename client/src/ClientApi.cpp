@@ -13,7 +13,9 @@ std::string ClientApi::help() {
 std::string ClientApi::branches() {
     return network_.sendCommand("BRANCHES");
 }
-
+std::string ClientApi::listUsers() {
+    return network_.sendCommand("LIST_USERS");
+}
 std::string ClientApi::escapeArg(std::string value) {
     for (char& c : value) {
         if (c == ' ') c = '_';
