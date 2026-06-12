@@ -3,9 +3,6 @@
 
 struct UserDto {
     std::string name;
-    std::string goal;
-    std::string level;
-    int days{};
-    int minutes{};
-    std::string limitations;
+    std::string email;
+    std::string password;
 };

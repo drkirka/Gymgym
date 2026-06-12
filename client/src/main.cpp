@@ -47,40 +47,6 @@ private:
     AuthState auth_;
     std::string message_;
 
-    std::vector<std::string> goals_{
-        "Muscle Gain",
-        "Weight Loss",
-        "General Fitness"
-    };
-
-    std::vector<std::string> goal_keys_{
-        "muscle_gain",
-        "weight_loss",
-        "general_fitness"
-    };
-
-    std::vector<std::string> levels_{
-        "Beginner",
-        "Intermediate",
-        "Advanced / Athlete"
-    };
-
-    std::vector<std::string> level_keys_{
-        "beginner",
-        "intermediate",
-        "advanced"
-    };
-
-    std::vector<std::string> day_labels_{
-        "1 day", "2 days", "3 days", "4 days", "5 days", "6 days", "7 days"
-    };
-
-    std::vector<std::string> duration_labels_{
-        "30 min", "45 min", "60 min", "75 min", "90 min", "120 min"
-    };
-
-    std::vector<int> duration_values_{ 30, 45, 60, 75, 90, 120 };
-
 public:
     App()
         : network_(
@@ -113,6 +79,7 @@ public:
         auto enter = Button("Enter", [&] {
             screen.ExitLoopClosure()();
             });
+
         auto container = Container::Vertical({
             menu_component,
             enter
@@ -120,21 +87,18 @@ public:
 
         auto renderer = Renderer(container, [&] {
             return vbox({
-                       text("Smart Gym Network") | bold | color(Color::Cyan) | hcenter,
-
-                       text("Target: " + network_.host() + ":" + std::to_string(network_.port()))
-                        | color(Color::GrayLight)
-                        | hcenter,
-
-                       text("FTXUI TCP client") | color(Color::GrayLight) | hcenter,
-                       separator(),
-                       menu_component->Render() | border,
-                       enter->Render() | hcenter,
-                       message_.empty()
-                           ? text("")
-                           : paragraph(message_) | color(Color::Green) | border
-                }) |
-                border;
+                text("Smart Gym Network") | bold | color(Color::Cyan) | hcenter,
+                text("Target: " + network_.host() + ":" + std::to_string(network_.port()))
+                    | color(Color::GrayLight)
+                    | hcenter,
+                text("FTXUI TCP client") | color(Color::GrayLight) | hcenter,
+                separator(),
+                menu_component->Render() | border,
+                enter->Render() | hcenter,
+                message_.empty()
+                    ? text("")
+                    : paragraph(message_) | color(Color::Green) | border
+                }) | border;
             });
 
         while (true) {
@@ -155,7 +119,6 @@ public:
     }
 
 private:
-
     void profile() {
         if (!auth_.loggedIn) {
             message_ = "ERROR Not logged in locally. Use Login first.";
@@ -190,30 +153,25 @@ private:
         if (it == sessionHistory_.end()) return {};
         return *it;
     }
-    void create_user() {
 
+    void create_user() {
         auto screen = ScreenInteractive::TerminalOutput();
 
         std::string name;
-        std::string limitations = "none";
+        std::string email;
+        std::string password;
         std::string local_message;
 
-        int goal_index = 0;
-        int level_index = 0;
-        int days_index = 2;
-        int duration_index = 2;
-
         auto name_input = Input(&name, "name");
-        auto limitations_input = Input(&limitations, "none");
+        auto email_input = Input(&email, "email");
 
-        auto goal_box = Radiobox(&goals_, &goal_index);
-        auto level_box = Radiobox(&levels_, &level_index);
-        auto days_box = Radiobox(&day_labels_, &days_index);
-        auto duration_box = Radiobox(&duration_labels_, &duration_index);
+        InputOption password_option;
+        password_option.password = true;
+        auto password_input = Input(&password, "password", password_option);
 
         auto save = Button("Save", [&] {
-            if (name.empty()) {
-                local_message = "ERROR Name is required";
+            if (name.empty() || email.empty() || password.empty()) {
+                local_message = "ERROR Name, email and password are required";
                 return;
             }
 
@@ -222,22 +180,15 @@ private:
                 return;
             }
 
-            if (limitations.empty()) {
-                limitations = "none";
-            }
-
-            if (!is_safe_token(limitations)) {
-                local_message = "ERROR Limitations must not contain special characters";
+            if (password.find_first_of(" \t\r\n") != std::string::npos) {
+                local_message = "ERROR Password must not contain whitespace";
                 return;
             }
 
             UserDto user{
                 name,
-                goal_keys_[goal_index],
-                level_keys_[level_index],
-                days_index + 1,
-                duration_values_[duration_index],
-                limitations
+                email,
+                password
             };
 
             local_message = api_.createUser(user);
@@ -257,76 +208,52 @@ private:
                     *it = user;
                 }
 
+                password.clear();
+
                 message_ =
                     local_message +
-                    "\nWARNING: This confirms only that server accepted CREATE_USER command."
-                    "\nCurrent server does not return saved user data.";
+                    "\nCREATE_USER sent account-only data: name, email, password."
+                    "\nFitness stats must be sent later through UPDATE_PROFILE.";
                 screen.ExitLoopClosure()();
             }
-
             else {
                 message_ = local_message;
             }
-
             });
 
         auto back = Button("Back", screen.ExitLoopClosure());
 
-        auto buttons = Container::Horizontal({
-            save,
-            back
-            });
-
         auto container = Container::Vertical({
             name_input,
-            goal_box,
-            level_box,
-            days_box,
-            duration_box,
-            limitations_input,
-            buttons
+            email_input,
+            password_input,
+            Container::Horizontal({save, back})
             });
 
         auto renderer = Renderer(container, [&] {
             return vbox({
-                       text("Create user") | bold | color(Color::Cyan) | hcenter,
-                       separator(),
+                text("Create user") | bold | color(Color::Cyan) | hcenter,
+                separator(),
 
-                       hbox({
-                           vbox({
-                               text("Name") | color(Color::Yellow),
-                               name_input->Render() | border,
+                text("Name") | color(Color::Yellow),
+                name_input->Render() | border,
 
-                               text("Goal") | color(Color::Yellow),
-                               goal_box->Render() | border,
+                text("Email") | color(Color::Yellow),
+                email_input->Render() | border,
 
-                               text("Level") | color(Color::Yellow),
-                               level_box->Render() | border,
-                           }) | flex,
+                text("Password") | color(Color::Yellow),
+                password_input->Render() | border,
 
-                           vbox({
-                               text("Days per week") | color(Color::Yellow),
-                               days_box->Render() | border,
+                hbox({
+                    save->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
 
-                               text("Workout duration") | color(Color::Yellow),
-                               duration_box->Render() | border,
-
-                               text("Limitations") | color(Color::Yellow),
-                               limitations_input->Render() | border,
-                           }) | flex,
-                       }),
-
-                       local_message.empty()
-                           ? text("")
-                           : paragraph(local_message) | color(Color::Red) | border,
-
-                       hbox({
-                           save->Render(),
-                           text(" "),
-                           back->Render()
-                       }) | hcenter
-                }) |
-                border;
+                local_message.empty()
+                    ? text("")
+                    : paragraph(local_message) | color(Color::Red) | border
+                }) | border;
             });
 
         screen.Loop(renderer);
@@ -364,20 +291,19 @@ private:
 
         auto renderer = Renderer(container, [&] {
             return vbox({
-                       text("Raw GET_USER request") | bold | color(Color::Cyan) | hcenter,
-                       separator(),
-                       text("Name") | color(Color::Yellow),
-                       name_input->Render() | border,
-                       hbox({
-                           search->Render(),
-                           text(" "),
-                           back->Render()
-                       }) | hcenter,
-                       response.empty()
-                           ? text("")
-                           : paragraph(response) | border
-                }) |
-                border;
+                text("Raw GET_USER request") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+                text("Name") | color(Color::Yellow),
+                name_input->Render() | border,
+                hbox({
+                    search->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+                response.empty()
+                    ? text("")
+                    : paragraph(response) | border
+                }) | border;
             });
 
         screen.Loop(renderer);
@@ -411,11 +337,8 @@ private:
                     rows.push_back(vbox({
                         text(std::to_string(i + 1) + ".") | bold,
                         hbox({ text("Name: ") | color(Color::Yellow), text(user.name) }),
-                        hbox({ text("Goal: ") | color(Color::Yellow), text(user.goal) }),
-                        hbox({ text("Level: ") | color(Color::Yellow), text(user.level) }),
-                        hbox({ text("Days: ") | color(Color::Yellow), text(std::to_string(user.days)) }),
-                        hbox({ text("Minutes: ") | color(Color::Yellow), text(std::to_string(user.minutes)) }),
-                        hbox({ text("Limitations: ") | color(Color::Yellow), text(user.limitations) }),
+                        hbox({ text("Email: ") | color(Color::Yellow), text(user.email) }),
+                        hbox({ text("Password: ") | color(Color::Yellow), text("[hidden]") }),
                         }) | border);
 
                     if (i + 1 < sessionHistory_.size()) {
@@ -465,27 +388,27 @@ private:
             });
 
         auto back = Button("Back", screen.ExitLoopClosure());
+
         auto container = Container::Vertical({
             Container::Horizontal({get, back})
             });
 
         auto renderer = Renderer(container, [&] {
             return vbox({
-                       text("Workout plan") | bold | color(Color::Cyan) | hcenter,
-                       separator(),
-                       text("Plan is generated for the currently logged-in user.")
-                           | color(Color::GrayLight)
-                           | hcenter,
-                       hbox({
-                           get->Render(),
-                           text(" "),
-                           back->Render()
-                       }) | hcenter,
-                       response.empty()
-                           ? text("")
-                           : paragraph(response) | border
-                }) |
-                border;
+                text("Workout plan") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+                text("Plan is generated for the currently logged-in user.")
+                    | color(Color::GrayLight)
+                    | hcenter,
+                hbox({
+                    get->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+                response.empty()
+                    ? text("")
+                    : paragraph(response) | border
+                }) | border;
             });
 
         screen.Loop(renderer);
@@ -498,12 +421,13 @@ private:
     void ping() {
         message_ = api_.ping();
     }
+
     void branches() {
         message_ = api_.branches();
     }
+
     void login() {
         auto screen = ScreenInteractive::TerminalOutput();
-
 
         std::string username;
         std::string password;
@@ -555,26 +479,25 @@ private:
 
         auto renderer = Renderer(container, [&] {
             return vbox({
-                       text("Login") | bold | color(Color::Cyan) | hcenter,
-                       separator(),
+                text("Login") | bold | color(Color::Cyan) | hcenter,
+                separator(),
 
-                       text("Username") | color(Color::Yellow),
-                       username_input->Render() | border,
+                text("Username") | color(Color::Yellow),
+                username_input->Render() | border,
 
-                       text("Password") | color(Color::Yellow),
-                       password_input->Render() | border,
+                text("Password") | color(Color::Yellow),
+                password_input->Render() | border,
 
-                       hbox({
-                           login_button->Render(),
-                           text(" "),
-                           back->Render()
-                       }) | hcenter,
+                hbox({
+                    login_button->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
 
-                       response.empty()
-                           ? text("")
-                           : paragraph(response) | color(ClientApi::isOk(response) ? Color::Green : Color::Red) | border
-                }) |
-                border;
+                response.empty()
+                    ? text("")
+                    : paragraph(response) | color(ClientApi::isOk(response) ? Color::Green : Color::Red) | border
+                }) | border;
             });
 
         screen.Loop(renderer);

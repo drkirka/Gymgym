@@ -56,12 +56,9 @@ std::string ClientApi::createUser(const UserDto& user) {
     return network_.sendCommand(makeCommand({
         {"command", "CREATE_USER"},
         {"name", user.name},
-        {"goal", user.goal},
-        {"level", user.level},
-        {"days", user.days},
-        {"minutes", user.minutes},
-        {"limitations", user.limitations}
-    }));
+        {"email", user.email},
+        {"password", user.password}
+        }));
 }
 
 std::string ClientApi::getUser(const std::string& name) {
