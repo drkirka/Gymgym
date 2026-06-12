@@ -1,4 +1,4 @@
-#include "server/core/server.h"
+#include "server/network/Server.h"
 #include "db/Database.h"
 #include "db/DatabaseConfig.h"
 #include <iostream>
@@ -11,7 +11,7 @@ int main() {
     config.password = "pass";
     server::db::Database database(config);
 
-    Server server(8080, database);
+    server::network::Server server(8080, database);
     server.start();
 
     return 0;
