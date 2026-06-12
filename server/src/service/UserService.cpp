@@ -1,6 +1,7 @@
 #include "server/service/UserService.h"
 
 #include <algorithm>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 namespace server::service {
 
@@ -24,6 +25,12 @@ std::optional<server::db::UserRecord> UserService::findByName(const std::string&
 
 std::vector<server::db::UserRecord> UserService::findAll() const {
     return userRepository_.findAll();
+}
+
+void UserService::createUser(const std::string& name, const std::string& email, const std::string& passwordHash) {
+    auto now = boost::posix_time::second_clock::universal_time();
+    server::db::UserRecord user(name, email, passwordHash, now);
+    userRepository_.persist(user);
 }
 
 } // namespace server::service

@@ -79,6 +79,13 @@ std::string RequestRouter::route(const std::string& request, ClientSession& sess
         return userHandler_.getUser(name, session);
     }
 
+    if (command == "CREATE_USER") {
+        std::string name = parsed.value("name", "");
+        std::string email = parsed.value("email", "");
+        std::string password = parsed.value("password", "");
+        return userHandler_.createUser(name, email, password);
+    }
+
     if (command == "GET_PLAN") {
         return planHandler_.getPlan(session);
     }

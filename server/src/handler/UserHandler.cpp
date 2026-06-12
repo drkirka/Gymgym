@@ -33,4 +33,22 @@ std::string UserHandler::getUser(const std::string& name, const ClientSession& s
     return response.dump() + "\n";
 }
 
+std::string UserHandler::createUser(const std::string& name, const std::string& email, const std::string& passwordHash) {
+    auto existing = userService_.findByName(name);
+
+    if (existing.has_value()) {
+        json response;
+        response["status"] = "ERROR";
+        response["message"] = "User already exists";
+        return response.dump() + "\n";
+    }
+
+    userService_.createUser(name, email, passwordHash);
+
+    json response;
+    response["status"] = "OK";
+    response["message"] = "User created";
+    return response.dump() + "\n";
+}
+ 
 } // namespace server::handler 
