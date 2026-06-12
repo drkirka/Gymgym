@@ -89,10 +89,29 @@ file(GLOB REPOSITORY_SOURCES
 
 add_executable(GymgymServer
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/server.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/request_handler.cpp
-     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/gym_state.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/gym_state.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/db/Database.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/network/Server.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/network/ClientHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/RequestRouter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/AuthHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/UserHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/TrainingPlanHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/ExerciseHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/WorkoutSessionHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/MeasurementHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/PersonalRecordHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/MuscleHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/EquipmentHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handler/StatusHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/service/UserService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/service/TrainingPlanService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/service/ExerciseService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/service/WorkoutSessionService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/service/MeasurementService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/service/PersonalRecordService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/service/MuscleService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/service/EquipmentService.cpp
     ${REPOSITORY_SOURCES}
     ${ODB_GENERATED_SOURCES}
 )
