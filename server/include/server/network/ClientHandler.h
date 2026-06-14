@@ -5,12 +5,13 @@
 #include "server/core/gym_state.h"
 #include "server/handler/RequestRouter.h"
 #include "db/Database.h"
+#include "BcryptHasher.h"
 
 namespace server::network {
 
     class ClientHandler {
     public:
-        ClientHandler(int clientSocket, std::shared_ptr<GymState> gymState, server::db::Database& database);
+        ClientHandler(int clientSocket, std::shared_ptr<GymState> gymState, server::db::Database& database, server::util::IPasswordHasher& hasher);
 
         void handle();
 

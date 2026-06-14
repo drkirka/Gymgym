@@ -9,6 +9,8 @@ find_library(ODB_LIBRARY NAMES odb REQUIRED)
 find_library(ODB_PGSQL_LIBRARY NAMES odb-pgsql REQUIRED)
 find_library(ODB_BOOST_LIBRARY NAMES odb-boost REQUIRED)
 find_library(PQ_LIBRARY NAMES pq REQUIRED)
+find_package(nlohmann_json REQUIRED)
+find_library(CRYPT_LIBRARY crypt REQUIRED)
 
 set(ODB_GENERATED_DIR ${CMAKE_BINARY_DIR}/odb-generated)
 file(MAKE_DIRECTORY ${ODB_GENERATED_DIR})
@@ -112,6 +114,7 @@ add_executable(GymgymServer
     ${CMAKE_CURRENT_SOURCE_DIR}/src/service/PersonalRecordService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/service/MuscleService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/service/EquipmentService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/util/BcryptHasher.cpp
     ${REPOSITORY_SOURCES}
     ${ODB_GENERATED_SOURCES}
 )
@@ -127,6 +130,7 @@ target_include_directories(GymgymServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include/server/network
     ${CMAKE_CURRENT_SOURCE_DIR}/include/server/handler
     ${CMAKE_CURRENT_SOURCE_DIR}/include/server/service
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/util
     ${ODB_GENERATED_DIR}
 )
 
@@ -135,6 +139,8 @@ target_link_libraries(GymgymServer
     ${ODB_PGSQL_LIBRARY}
     ${ODB_BOOST_LIBRARY}
     ${PQ_LIBRARY}
+    ${CRYPT_LIBRARY}
+    nlohmann_json::nlohmann_json
 )
 
 add_executable(PrintUserRecords

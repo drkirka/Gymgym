@@ -20,6 +20,7 @@ Server::~Server() {
 }
 
 void Server::start() {
+    server::util::BcryptHasher hasher;
     serverSocket_ = socket(AF_INET, SOCK_STREAM, 0);
 
     if (serverSocket_ == -1) {
@@ -57,8 +58,8 @@ void Server::start() {
 
         std::cout << "Client connected" << std::endl;
 
-        std::thread clientThread([this, clientSocket]() {
-            ClientHandler handler(clientSocket, gymState_, database_);
+        std::thread clientThread([this, clientSocket, &hasher]() {
+            ClientHandler handler(clientSocket, gymState_, database_, hasher);
             handler.handle();
         });
 

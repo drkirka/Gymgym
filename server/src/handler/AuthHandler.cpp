@@ -6,8 +6,8 @@ using json = nlohmann::json;
 
 namespace server::handler {
 
-AuthHandler::AuthHandler(GymState& gymState, server::service::UserService& userService)
-    : gymState_(gymState), userService_(userService) {}
+AuthHandler::AuthHandler(GymState& gymState, server::service::UserService& userService, server::util::IPasswordHasher& hasher)
+    : gymState_(gymState), userService_(userService), hasher_(hasher) {}
 
 std::string AuthHandler::login(const std::string& username, const std::string& password, ClientSession& session, int clientSocket) {
     auto user = userService_.findByName(username);
@@ -20,7 +20,7 @@ std::string AuthHandler::login(const std::string& username, const std::string& p
     }
 
     // TODO: replace with bcrypt verification
-    if (user->passwordHash() != password) {
+    if (hasher_.verify(password, user->passwordHash())) {
         json response;
         response["status"] = "ERROR";
         response["message"] = "Invalid login";

@@ -5,6 +5,7 @@
 #include "db/Database.h"
 #include "server/core/session.h"
 #include "server/core/gym_state.h"
+#include "BcryptHasher.h"
 
 #include "server/service/UserService.h"
 #include "server/service/TrainingPlanService.h"
@@ -30,7 +31,7 @@ namespace server::handler {
 
     class RequestRouter {
     public:
-        explicit RequestRouter(GymState& gymState, server::db::Database& database);
+        explicit RequestRouter(GymState& gymState, server::db::Database& database, server::util::IPasswordHasher& hasher);
 
         std::string route(const std::string& request, ClientSession& session, int clientSocket);
 

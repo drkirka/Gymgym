@@ -7,10 +7,10 @@
 
 namespace server::network {
 
-ClientHandler::ClientHandler(int clientSocket, std::shared_ptr<GymState> gymState, server::db::Database& database)
+ClientHandler::ClientHandler(int clientSocket, std::shared_ptr<GymState> gymState, server::db::Database& database, server::util::IPasswordHasher& hasher)
     : clientSocket_(clientSocket),
       gymState_(gymState),
-      router_(*gymState, database) {}
+      router_(*gymState, database, hasher) {}
 
 void ClientHandler::handle() {
     gymState_->addClient(clientSocket_);

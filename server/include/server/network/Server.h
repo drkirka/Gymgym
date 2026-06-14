@@ -4,6 +4,7 @@
 
 #include "server/core/gym_state.h"
 #include "db/Database.h"
+#include "BcryptHasher.h"
 
 namespace server::network {
 

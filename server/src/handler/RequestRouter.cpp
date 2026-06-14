@@ -6,8 +6,8 @@ using json = nlohmann::json;
 
 namespace server::handler {
 
-RequestRouter::RequestRouter(GymState& gymState, server::db::Database& database)
-    : userService_(database),
+RequestRouter::RequestRouter(GymState& gymState, server::db::Database& database, server::util::IPasswordHasher& hasher)
+    : userService_(database, hasher),
       planService_(database),
       exerciseService_(database),
       sessionService_(database),
@@ -15,7 +15,7 @@ RequestRouter::RequestRouter(GymState& gymState, server::db::Database& database)
       recordService_(database),
       muscleService_(database),
       equipmentService_(database),
-      authHandler_(gymState, userService_),
+      authHandler_(gymState, userService_, hasher),
       userHandler_(userService_),
       planHandler_(userService_, planService_),
       exerciseHandler_(exerciseService_),

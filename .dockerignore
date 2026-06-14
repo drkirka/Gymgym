@@ -1,0 +1,16 @@
+# Build artifacts
+build/
+out/
+bin/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+
+# Git
+.git
+.gitignore
+
+# OS junk
+.DS_Store
