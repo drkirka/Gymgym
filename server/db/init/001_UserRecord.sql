@@ -4,12 +4,17 @@
 
 DROP TABLE IF EXISTS "users" CASCADE;
 
-CREATE TABLE "users" (
+CCREATE TABLE "users" (
   "id" BIGSERIAL NOT NULL PRIMARY KEY,
   "name" TEXT NOT NULL,
   "email" TEXT NOT NULL,
   "password_hash" TEXT NOT NULL,
-  "created_at" TIMESTAMP NULL);
+  "created_at" TIMESTAMP NULL,
+  "goal" TEXT NOT NULL,
+  "level" SMALLINT NOT NULL,
+  "days" SMALLINT NOT NULL,
+  "minutes" SMALLINT NOT NULL,
+  "limitations" TEXT NOT NULL);
 
 CREATE UNIQUE INDEX "users_email_i"
   ON "users" ("email");
