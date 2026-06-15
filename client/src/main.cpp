@@ -66,6 +66,10 @@ public:
             "Raw GET_USER request",
             "Local cache",
             "Get workout plan",
+            "My workout sessions",
+            "Exercises",
+            "Measurements",
+            "Personal records",
             "Server status",
             "Ping server",
             "Branches",
@@ -108,12 +112,16 @@ public:
             else if (selected == 1) get_user_from_server();
             else if (selected == 2) view_cache();
             else if (selected == 3) get_plan();
-            else if (selected == 4) server_status();
-            else if (selected == 5) ping();
-            else if (selected == 6) branches();
-            else if (selected == 7) login();
-            else if (selected == 8) logout();
-            else if (selected == 9) profile();
+            else if (selected == 4) get_sessions();
+            else if (selected == 5) get_exercises();
+            else if (selected == 6) get_measurements();
+            else if (selected == 7) get_records();
+            else if (selected == 8) server_status();
+            else if (selected == 9) ping();
+            else if (selected == 10) branches();
+            else if (selected == 11) login();
+            else if (selected == 12) logout();
+            else if (selected == 13) profile();
             else break;
         }
     }
@@ -398,6 +406,169 @@ private:
                 text("Workout plan") | bold | color(Color::Cyan) | hcenter,
                 separator(),
                 text("Plan is generated for the currently logged-in user.")
+                    | color(Color::GrayLight)
+                    | hcenter,
+                hbox({
+                    get->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+                response.empty()
+                    ? text("")
+                    : paragraph(response) | border
+                }) | border;
+            });
+
+        screen.Loop(renderer);
+    }
+
+    void get_exercises() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string response;
+
+        auto get = Button("Get exercises", [&] {
+            response = api_.getExercises();
+            message_ = response;
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            Container::Horizontal({get, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                text("Exercises") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+                text("Shows exercises available from the server.")
+                    | color(Color::GrayLight)
+                    | hcenter,
+                hbox({
+                    get->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+                response.empty()
+                    ? text("")
+                    : paragraph(response) | border
+                }) | border;
+            });
+
+        screen.Loop(renderer);
+    }
+    void get_measurements() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string response;
+
+        auto get = Button("Get measurements", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            response = api_.getMeasurements();
+            message_ = response;
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            Container::Horizontal({get, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                text("Measurements") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+                text("Shows body measurements for the currently logged-in user.")
+                    | color(Color::GrayLight)
+                    | hcenter,
+                hbox({
+                    get->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+                response.empty()
+                    ? text("")
+                    : paragraph(response) | border
+                }) | border;
+            });
+
+        screen.Loop(renderer);
+    }
+    void get_records() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string response;
+
+        auto get = Button("Get records", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            response = api_.getRecords();
+            message_ = response;
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            Container::Horizontal({get, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                text("Personal records") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+                text("Shows personal exercise records for the currently logged-in user.")
+                    | color(Color::GrayLight)
+                    | hcenter,
+                hbox({
+                    get->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+                response.empty()
+                    ? text("")
+                    : paragraph(response) | border
+                }) | border;
+            });
+
+        screen.Loop(renderer);
+    }
+    void get_sessions() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string response;
+
+        auto get = Button("Get sessions", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            response = api_.getSessions();
+            message_ = response;
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            Container::Horizontal({get, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                text("My workout sessions") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+                text("Shows workout sessions for the currently logged-in user.")
                     | color(Color::GrayLight)
                     | hcenter,
                 hbox({

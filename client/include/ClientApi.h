@@ -21,6 +21,10 @@ public:
     std::string serverStatus();
     std::string ping();
     std::string profile();
+    std::string getSessions();
+    std::string getExercises();
+    std::string getMeasurements();
+    std::string getRecords();
 
     static bool isOk(const std::string& response);
     static bool isError(const std::string& response);

@@ -84,6 +84,21 @@ std::string ClientApi::ping() {
 std::string ClientApi::profile() {
     return network_.sendCommand(makeCommand({ {"command", "PROFILE"} }));
 }
+std::string ClientApi::getSessions() {
+    return network_.sendCommand(makeCommand({ {"command", "GET_SESSIONS"} }));
+}
+
+std::string ClientApi::getExercises() {
+    return network_.sendCommand(makeCommand({ {"command", "GET_EXERCISES"} }));
+}
+
+std::string ClientApi::getMeasurements() {
+    return network_.sendCommand(makeCommand({ {"command", "GET_MEASUREMENTS"} }));
+}
+
+std::string ClientApi::getRecords() {
+    return network_.sendCommand(makeCommand({ {"command", "GET_RECORDS"} }));
+}
 
 PlanDto ClientApi::parsePlanResponse(const std::string& response) {
     PlanDto dto;
@@ -103,6 +118,23 @@ PlanDto ClientApi::parsePlanResponse(const std::string& response) {
         for (const auto& item : parsed["plans"]) {
             if (item.is_string()) {
                 dto.plans.push_back(item.get<std::string>());
+            }
+            else if (item.is_object()) {
+                std::string name = item.value("name", "");
+                std::string description = item.value("description", "");
+                int duration = item.value("duration", 0);
+
+                std::string planText = name;
+
+                if (!description.empty()) {
+                    planText += " - " + description;
+                }
+
+                if (duration > 0) {
+                    planText += " (" + std::to_string(duration) + " min)";
+                }
+
+                dto.plans.push_back(planText);
             }
         }
     }
