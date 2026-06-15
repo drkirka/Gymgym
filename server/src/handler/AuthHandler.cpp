@@ -20,7 +20,7 @@ std::string AuthHandler::login(const std::string& username, const std::string& p
     }
 
     // TODO: replace with bcrypt verification
-    if (hasher_.verify(password, user->passwordHash())) {
+    if (!hasher_.verify(password, user->passwordHash())) {
         json response;
         response["status"] = "ERROR";
         response["message"] = "Invalid login";

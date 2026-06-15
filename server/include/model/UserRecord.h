@@ -50,10 +50,15 @@ private:
     std::string password_hash_;
     boost::posix_time::ptime created_at_{};
 
+    #pragma db null
     std::string goal_{};
+    #pragma db null
     std::uint16_t level_{};
+    #pragma db null
     std::uint16_t days_{};
+    #pragma db null
     std::uint16_t minutes_{};
+    #pragma db null
     std::string limitations_{};
 };
 
