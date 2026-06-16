@@ -25,6 +25,33 @@ public:
     std::string getExercises();
     std::string getMeasurements();
     std::string getRecords();
+    std::string createTrainingPlan(
+        const std::string& name,
+        const std::string& description,
+        int duration,
+        int difficulty,
+        bool isPublic
+    );
+
+    std::string createWorkoutSession(
+        const std::string& description,
+        int trainingPlanId
+    );
+
+    std::string createMeasurement(
+        double weightKg,
+        double bodyFatPercentage,
+        double chestCm,
+        double waistCm,
+        double armCm,
+        double legCm
+    );
+
+    std::string createPersonalRecord(
+        int exerciseId,
+        double weightKg,
+        int repetitions
+    );
 
     static bool isOk(const std::string& response);
     static bool isError(const std::string& response);

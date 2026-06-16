@@ -149,6 +149,69 @@ bool ClientApi::isOk(const std::string& response) {
     return hasStatus(response, "OK");
 }
 
+std::string ClientApi::createTrainingPlan(
+    const std::string& name,
+    const std::string& description,
+    int duration,
+    int difficulty,
+    bool isPublic
+) {
+    return network_.sendCommand(makeCommand({
+        {"command", "CREATE_TRAINING_PLAN"},
+        {"name", name},
+        {"description", description},
+        {"duration", duration},
+        {"difficulty", difficulty},
+        {"is_public", isPublic}
+        }));
+}
+std::string ClientApi::createWorkoutSession(
+    const std::string& description,
+    int trainingPlanId
+) {
+    json request = {
+        {"command", "CREATE_WORKOUT_SESSION"},
+        {"description", description}
+    };
+
+    if (trainingPlanId > 0) {
+        request["training_plan_id"] = trainingPlanId;
+    }
+
+    return network_.sendCommand(makeCommand(request));
+}
+std::string ClientApi::createMeasurement(
+    double weightKg,
+    double bodyFatPercentage,
+    double chestCm,
+    double waistCm,
+    double armCm,
+    double legCm
+) {
+    return network_.sendCommand(makeCommand({
+        {"command", "CREATE_MEASUREMENT"},
+        {"weight_kg", weightKg},
+        {"body_fat_percentage", bodyFatPercentage},
+        {"chest_cm", chestCm},
+        {"waist_cm", waistCm},
+        {"arm_cm", armCm},
+        {"leg_cm", legCm}
+        }));
+}
+std::string ClientApi::createPersonalRecord(
+    int exerciseId,
+    double weightKg,
+    int repetitions
+) {
+    return network_.sendCommand(makeCommand({
+        {"command", "CREATE_PERSONAL_RECORD"},
+        {"exercise_id", exerciseId},
+        {"weight_kg", weightKg},
+        {"repetitions", repetitions}
+        }));
+}
+
+
 bool ClientApi::isError(const std::string& response) {
     return hasStatus(response, "ERROR");
 }

@@ -65,11 +65,21 @@ public:
             "Create user",
             "Raw GET_USER request",
             "Local cache",
+
             "Get workout plan",
+            "Create training plan",
+
             "My workout sessions",
+            "Create workout session",
+
             "Exercises",
+
             "Measurements",
+            "Add body measurement",
+
             "Personal records",
+            "Add personal record",
+
             "Server status",
             "Ping server",
             "Branches",
@@ -111,17 +121,27 @@ public:
             if (selected == 0) create_user();
             else if (selected == 1) get_user_from_server();
             else if (selected == 2) view_cache();
+
             else if (selected == 3) get_plan();
-            else if (selected == 4) get_sessions();
-            else if (selected == 5) get_exercises();
-            else if (selected == 6) get_measurements();
-            else if (selected == 7) get_records();
-            else if (selected == 8) server_status();
-            else if (selected == 9) ping();
-            else if (selected == 10) branches();
-            else if (selected == 11) login();
-            else if (selected == 12) logout();
-            else if (selected == 13) profile();
+            else if (selected == 4) create_training_plan();
+
+            else if (selected == 5) get_sessions();
+            else if (selected == 6) create_workout_session();
+
+            else if (selected == 7) get_exercises();
+
+            else if (selected == 8) get_measurements();
+            else if (selected == 9) add_measurement();
+
+            else if (selected == 10) get_records();
+            else if (selected == 11) add_personal_record();
+
+            else if (selected == 12) server_status();
+            else if (selected == 13) ping();
+            else if (selected == 14) branches();
+            else if (selected == 15) login();
+            else if (selected == 16) logout();
+            else if (selected == 17) profile();
             else break;
         }
     }
@@ -363,6 +383,301 @@ private:
         screen.Loop(renderer);
     }
 
+
+    void create_training_plan() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string name;
+        std::string description;
+        std::string duration;
+        std::string difficulty;
+        bool is_public = false;
+        std::string response;
+
+        auto name_input = Input(&name, "name");
+        auto description_input = Input(&description, "description");
+        auto duration_input = Input(&duration, "duration minutes");
+        auto difficulty_input = Input(&difficulty, "difficulty 1-5");
+        auto public_checkbox = Checkbox("Public", &is_public);
+
+        auto create = Button("Create", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            if (name.empty() || duration.empty() || difficulty.empty()) {
+                response = "ERROR Name, duration and difficulty are required";
+                return;
+            }
+
+            int duration_value;
+            int difficulty_value;
+
+            try {
+                duration_value = std::stoi(duration);
+                difficulty_value = std::stoi(difficulty);
+            }
+            catch (...) {
+                response = "ERROR Duration and difficulty must be numbers";
+                return;
+            }
+
+            if (duration_value <= 0) {
+                response = "ERROR Duration must be positive";
+                return;
+            }
+
+            if (difficulty_value < 1 || difficulty_value > 5) {
+                response = "ERROR Difficulty must be between 1 and 5";
+                return;
+            }
+
+            response = api_.createTrainingPlan(
+                name,
+                description,
+                duration_value,
+                difficulty_value,
+                is_public
+            );
+
+            message_ = response;
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            name_input,
+            description_input,
+            duration_input,
+            difficulty_input,
+            public_checkbox,
+            Container::Horizontal({create, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                text("Create training plan") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+
+                text("Name") | color(Color::Yellow),
+                name_input->Render() | border,
+
+                text("Description") | color(Color::Yellow),
+                description_input->Render() | border,
+
+                text("Duration minutes") | color(Color::Yellow),
+                duration_input->Render() | border,
+
+                text("Difficulty") | color(Color::Yellow),
+                difficulty_input->Render() | border,
+
+                public_checkbox->Render(),
+
+                hbox({
+                    create->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+
+                response.empty()
+                    ? text("")
+                    : paragraph(response)
+                        | color(ClientApi::isOk(response) ? Color::Green : Color::Red)
+                        | border
+                }) | border;
+            });
+
+        screen.Loop(renderer);
+    }
+
+    void create_workout_session() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string description;
+        std::string training_plan_id;
+        std::string response;
+
+        auto description_input = Input(&description, "description");
+        auto plan_input = Input(&training_plan_id, "training plan id optional");
+
+        auto create = Button("Create", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            int plan_id = 0;
+
+            if (!training_plan_id.empty()) {
+                try {
+                    plan_id = std::stoi(training_plan_id);
+                }
+                catch (...) {
+                    response = "ERROR Training plan id must be a number";
+                    return;
+                }
+
+                if (plan_id < 0) {
+                    response = "ERROR Training plan id must be positive";
+                    return;
+                }
+            }
+
+            response = api_.createWorkoutSession(description, plan_id);
+            message_ = response;
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            description_input,
+            plan_input,
+            Container::Horizontal({create, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                text("Create workout session") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+
+                text("Description") | color(Color::Yellow),
+                description_input->Render() | border,
+
+                text("Training Plan ID optional") | color(Color::Yellow),
+                plan_input->Render() | border,
+
+                hbox({
+                    create->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+
+                response.empty()
+                    ? text("")
+                    : paragraph(response)
+                        | color(ClientApi::isOk(response) ? Color::Green : Color::Red)
+                        | border
+                }) | border;
+            });
+
+        screen.Loop(renderer);
+    }
+    
+    void add_measurement() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string weight;
+        std::string body_fat;
+        std::string chest;
+        std::string waist;
+        std::string arm;
+        std::string leg;
+        std::string response;
+
+        auto weight_input = Input(&weight, "weight kg");
+        auto body_fat_input = Input(&body_fat, "body fat %");
+        auto chest_input = Input(&chest, "chest cm");
+        auto waist_input = Input(&waist, "waist cm");
+        auto arm_input = Input(&arm, "arm cm");
+        auto leg_input = Input(&leg, "leg cm");
+
+        auto save = Button("Save", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            try {
+                double weight_value = std::stod(weight);
+                double body_fat_value = std::stod(body_fat);
+                double chest_value = std::stod(chest);
+                double waist_value = std::stod(waist);
+                double arm_value = std::stod(arm);
+                double leg_value = std::stod(leg);
+
+                if (weight_value <= 0) {
+                    response = "ERROR Weight must be positive";
+                    return;
+                }
+
+                if (body_fat_value < 0 || body_fat_value > 100) {
+                    response = "ERROR Body fat must be between 0 and 100";
+                    return;
+                }
+
+                response = api_.createMeasurement(
+                    weight_value,
+                    body_fat_value,
+                    chest_value,
+                    waist_value,
+                    arm_value,
+                    leg_value
+                );
+
+                message_ = response;
+            }
+            catch (...) {
+                response = "ERROR All fields must be numbers";
+            }
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            weight_input,
+            body_fat_input,
+            chest_input,
+            waist_input,
+            arm_input,
+            leg_input,
+            Container::Horizontal({save, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                text("Add body measurement") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+
+                text("Weight kg") | color(Color::Yellow),
+                weight_input->Render() | border,
+
+                text("Body fat %") | color(Color::Yellow),
+                body_fat_input->Render() | border,
+
+                text("Chest cm") | color(Color::Yellow),
+                chest_input->Render() | border,
+
+                text("Waist cm") | color(Color::Yellow),
+                waist_input->Render() | border,
+
+                text("Arm cm") | color(Color::Yellow),
+                arm_input->Render() | border,
+
+                text("Leg cm") | color(Color::Yellow),
+                leg_input->Render() | border,
+
+                hbox({
+                    save->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+
+                response.empty()
+                    ? text("")
+                    : paragraph(response)
+                        | color(ClientApi::isOk(response) ? Color::Green : Color::Red)
+                        | border
+                }) | border;
+            });
+
+        screen.Loop(renderer);
+    }
+
+
     void get_plan() {
         auto screen = ScreenInteractive::TerminalOutput();
 
@@ -537,6 +852,97 @@ private:
                 response.empty()
                     ? text("")
                     : paragraph(response) | border
+                }) | border;
+            });
+
+        screen.Loop(renderer);
+    }
+    void add_personal_record() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string exercise_id;
+        std::string weight;
+        std::string repetitions;
+        std::string response;
+
+        auto exercise_input = Input(&exercise_id, "exercise id");
+        auto weight_input = Input(&weight, "weight kg");
+        auto reps_input = Input(&repetitions, "repetitions");
+
+        auto save = Button("Save", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            try {
+                int exercise_value = std::stoi(exercise_id);
+                double weight_value = std::stod(weight);
+                int reps_value = std::stoi(repetitions);
+
+                if (exercise_value <= 0) {
+                    response = "ERROR Exercise id must be positive";
+                    return;
+                }
+
+                if (weight_value <= 0) {
+                    response = "ERROR Weight must be positive";
+                    return;
+                }
+
+                if (reps_value <= 0) {
+                    response = "ERROR Repetitions must be positive";
+                    return;
+                }
+
+                response = api_.createPersonalRecord(
+                    exercise_value,
+                    weight_value,
+                    reps_value
+                );
+
+                message_ = response;
+            }
+            catch (...) {
+                response = "ERROR Exercise id, weight and repetitions must be numbers";
+            }
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            exercise_input,
+            weight_input,
+            reps_input,
+            Container::Horizontal({save, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                text("Add personal record") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+
+                text("Exercise ID") | color(Color::Yellow),
+                exercise_input->Render() | border,
+
+                text("Weight kg") | color(Color::Yellow),
+                weight_input->Render() | border,
+
+                text("Repetitions") | color(Color::Yellow),
+                reps_input->Render() | border,
+
+                hbox({
+                    save->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+
+                response.empty()
+                    ? text("")
+                    : paragraph(response)
+                        | color(ClientApi::isOk(response) ? Color::Green : Color::Red)
+                        | border
                 }) | border;
             });
 
