@@ -27,8 +27,13 @@ server::db::WorkoutSessionRecord WorkoutSessionService::create(
     }
 
     auto now = boost::posix_time::second_clock::local_time();
-    server::db::WorkoutSessionRecord record(description, now, boost::posix_time::ptime(), 
-                                             std::make_shared<server::db::UserRecord>(*user));
+    server::db::WorkoutSessionRecord record(
+        description,
+        now,
+        boost::posix_time::ptime(),
+        std::make_shared<server::db::UserRecord>(*user)
+    );
+
     record.setStatus(1);
 
     if (trainingPlanId > 0) {
@@ -36,6 +41,7 @@ server::db::WorkoutSessionRecord WorkoutSessionService::create(
         if (!plan.has_value()) {
             throw std::runtime_error("Training plan not found");
         }
+        record.setTrainingPlan(std::make_shared<server::db::TrainingPlanRecord>(*plan));
     }
 
     sessionRepository_.persist(record);
