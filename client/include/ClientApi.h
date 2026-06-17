@@ -35,7 +35,8 @@ public:
 
     std::string createWorkoutSession(
         const std::string& description,
-        int trainingPlanId
+        int trainingPlanId,
+        const std::string& sessionJson
     );
 
     std::string createMeasurement(

@@ -1,7 +1,9 @@
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -70,7 +72,7 @@ public:
             "Create training plan",
 
             "My workout sessions",
-            "Create workout session",
+            "Start workout",
 
             "Exercises",
 
@@ -336,7 +338,6 @@ private:
 
         screen.Loop(renderer);
     }
-
     void view_cache() {
         auto screen = ScreenInteractive::TerminalOutput();
 
@@ -492,68 +493,335 @@ private:
         screen.Loop(renderer);
     }
 
+
+    std::optional<int> extract_first_positive_int(const std::string& value) {
+        std::string digits;
+
+        for (unsigned char ch : value) {
+            if (std::isdigit(ch)) {
+                digits.push_back(static_cast<char>(ch));
+            }
+            else if (!digits.empty()) {
+                break;
+            }
+        }
+
+        if (digits.empty()) {
+            return {};
+        }
+
+        try {
+            int parsed = std::stoi(digits);
+            if (parsed > 0) {
+                return parsed;
+            }
+        }
+        catch (...) {
+        }
+
+        return {};
+    }
+
     void create_workout_session() {
         auto screen = ScreenInteractive::TerminalOutput();
 
-        std::string description;
-        std::string training_plan_id;
+        std::string description = "Workout completed from client";
+        std::string manual_training_plan_id;
+        std::string exercise_id;
+        std::string weight;
+        std::string repetitions;
         std::string response;
+        std::string plans_preview;
+
+        std::vector<std::string> loaded_plans;
+        std::vector<std::string> plan_menu_entries;
+        std::vector<std::string> sets;
+
+        int selected_plan = 0;
+        int set_number = 1;
+        int active_plan_id = 0;
+        bool workout_started = false;
+        bool workout_sent = false;
 
         auto description_input = Input(&description, "description");
-        auto plan_input = Input(&training_plan_id, "training plan id optional");
+        auto manual_plan_input = Input(&manual_training_plan_id, "manual plan id fallback");
+        auto exercise_input = Input(&exercise_id, "exercise id");
+        auto weight_input = Input(&weight, "weight kg");
+        auto reps_input = Input(&repetitions, "repetitions");
+        auto plan_menu_component = Menu(&plan_menu_entries, &selected_plan);
 
-        auto create = Button("Create", [&] {
+        auto load_plans = Button("Load saved plans", [&] {
             if (!auth_.loggedIn) {
                 response = "ERROR Not logged in locally. Use Login first.";
                 message_ = response;
                 return;
             }
 
-            int plan_id = 0;
+            PlanDto plan = api_.getPlan();
 
-            if (!training_plan_id.empty()) {
+            if (ClientApi::isError(plan.rawResponse)) {
+                response = plan.rawResponse;
+                plans_preview.clear();
+                return;
+            }
+
+            loaded_plans = plan.plans;
+            plan_menu_entries.clear();
+            selected_plan = 0;
+
+            if (loaded_plans.empty()) {
+                response = "ERROR No parsed training plans found. Server response:\n" + plan.rawResponse;
+                plans_preview.clear();
+                return;
+            }
+
+            plans_preview = "Saved training plans loaded locally:\n";
+
+            for (size_t i = 0; i < loaded_plans.size(); ++i) {
+                std::string entry = std::to_string(i + 1) + ". " + loaded_plans[i];
+                plan_menu_entries.push_back(entry);
+                plans_preview += entry + "\n";
+            }
+
+            plans_preview += "\nSelect one plan below. If the plan id is not visible in the text, enter it manually.";
+            response = "OK Loaded " + std::to_string(loaded_plans.size()) + " saved training plan(s) locally.";
+            });
+
+        auto start_workout = Button("Start workout", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            std::optional<int> parsed_plan_id;
+
+            if (!manual_training_plan_id.empty()) {
                 try {
-                    plan_id = std::stoi(training_plan_id);
+                    int manual_id = std::stoi(manual_training_plan_id);
+                    if (manual_id <= 0) {
+                        response = "ERROR Manual training plan id must be positive";
+                        return;
+                    }
+
+                    parsed_plan_id = manual_id;
                 }
                 catch (...) {
-                    response = "ERROR Training plan id must be a number";
+                    response = "ERROR Manual training plan id must be a number";
+                    return;
+                }
+            }
+            else {
+                if (loaded_plans.empty()) {
+                    response = "ERROR Load saved plans first or enter a manual training plan id.";
                     return;
                 }
 
-                if (plan_id < 0) {
-                    response = "ERROR Training plan id must be positive";
+                if (selected_plan < 0 || selected_plan >= static_cast<int>(loaded_plans.size())) {
+                    response = "ERROR Select a valid training plan.";
+                    return;
+                }
+
+                parsed_plan_id = extract_first_positive_int(loaded_plans[static_cast<size_t>(selected_plan)]);
+
+                if (!parsed_plan_id.has_value()) {
+                    response = "ERROR Could not detect plan id from selected plan text. Enter plan id manually.";
                     return;
                 }
             }
 
-            response = api_.createWorkoutSession(description, plan_id);
+            active_plan_id = parsed_plan_id.value();
+            workout_started = true;
+            workout_sent = false;
+            sets.clear();
+            set_number = 1;
+
+            if (description.empty()) {
+                description = "Workout completed from client";
+            }
+
+            response =
+                "OK Workout started locally for training plan id " +
+                std::to_string(active_plan_id) +
+                ". Complete sets locally, then press Finish workout once.";
+            });
+
+        auto add_set = Button("Complete set locally", [&] {
+            if (!workout_started) {
+                response = "ERROR Press Start workout before adding sets.";
+                return;
+            }
+
+            if (exercise_id.empty() || weight.empty() || repetitions.empty()) {
+                response = "ERROR Exercise id, weight and repetitions are required";
+                return;
+            }
+
+            int exercise_value;
+            double weight_value;
+            int reps_value;
+
+            try {
+                exercise_value = std::stoi(exercise_id);
+                weight_value = std::stod(weight);
+                reps_value = std::stoi(repetitions);
+            }
+            catch (...) {
+                response = "ERROR Exercise id, weight and repetitions must be numbers";
+                return;
+            }
+
+            if (exercise_value <= 0) {
+                response = "ERROR Exercise id must be positive";
+                return;
+            }
+
+            if (weight_value <= 0) {
+                response = "ERROR Weight must be positive";
+                return;
+            }
+
+            if (reps_value <= 0) {
+                response = "ERROR Repetitions must be positive";
+                return;
+            }
+
+            std::ostringstream set_json;
+            set_json
+                << "{\"exercise_id\":" << exercise_value
+                << ",\"set_number\":" << set_number
+                << ",\"weight_kg\":" << weight_value
+                << ",\"repetitions\":" << reps_value
+                << ",\"completed\":true}";
+
+            sets.push_back(set_json.str());
+            ++set_number;
+
+            exercise_id.clear();
+            weight.clear();
+            repetitions.clear();
+
+            response = "OK Set saved locally. Local sets: " + std::to_string(sets.size());
+            });
+
+        auto finish = Button("Finish workout", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            if (!workout_started) {
+                response = "ERROR Start a workout before finishing it.";
+                return;
+            }
+
+            if (sets.empty()) {
+                response = "ERROR Complete at least one set before finishing workout";
+                return;
+            }
+
+            std::string session_json = "{\"sets\":[";
+
+            for (size_t i = 0; i < sets.size(); ++i) {
+                if (i > 0) {
+                    session_json += ",";
+                }
+
+                session_json += sets[i];
+            }
+
+            session_json += "]}";
+
+            response = api_.createWorkoutSession(description, active_plan_id, session_json);
             message_ = response;
+
+            if (ClientApi::isOk(response)) {
+                workout_sent = true;
+                workout_started = false;
+            }
             });
 
         auto back = Button("Back", screen.ExitLoopClosure());
 
         auto container = Container::Vertical({
             description_input,
-            plan_input,
-            Container::Horizontal({create, back})
+            manual_plan_input,
+            plan_menu_component,
+            exercise_input,
+            weight_input,
+            reps_input,
+            Container::Horizontal({load_plans, start_workout}),
+            Container::Horizontal({add_set, finish, back})
             });
 
         auto renderer = Renderer(container, [&] {
+            std::string selected_plan_text = "Selected plan: ";
+
+            if (loaded_plans.empty()) {
+                selected_plan_text += "none loaded";
+            }
+            else if (selected_plan >= 0 && selected_plan < static_cast<int>(loaded_plans.size())) {
+                selected_plan_text += loaded_plans[static_cast<size_t>(selected_plan)];
+            }
+            else {
+                selected_plan_text += "invalid selection";
+            }
+
+            std::string workout_state =
+                workout_started
+                ? "Workout in progress. Active plan id: " + std::to_string(active_plan_id)
+                : workout_sent
+                ? "Workout sent to server."
+                : "Workout not started.";
+
             return vbox({
-                text("Create workout session") | bold | color(Color::Cyan) | hcenter,
+                text("Start workout") | bold | color(Color::Cyan) | hcenter,
                 separator(),
+
+                text("Flow: load saved plans -> select plan -> start workout -> complete sets locally -> one server call on Finish.")
+                    | color(Color::GrayLight)
+                    | hcenter,
 
                 text("Description") | color(Color::Yellow),
                 description_input->Render() | border,
 
-                text("Training Plan ID optional") | color(Color::Yellow),
-                plan_input->Render() | border,
+                text("Manual Training Plan ID fallback") | color(Color::Yellow),
+                manual_plan_input->Render() | border,
+
+                text("Saved training plans") | color(Color::Yellow),
+                plan_menu_component->Render() | border,
+                paragraph(selected_plan_text) | color(Color::GrayLight),
+
+                text("Exercise ID") | color(Color::Yellow),
+                exercise_input->Render() | border,
+
+                text("Weight kg") | color(Color::Yellow),
+                weight_input->Render() | border,
+
+                text("Repetitions") | color(Color::Yellow),
+                reps_input->Render() | border,
 
                 hbox({
-                    create->Render(),
+                    load_plans->Render(),
+                    text(" "),
+                    start_workout->Render()
+                }) | hcenter,
+
+                hbox({
+                    add_set->Render(),
+                    text(" "),
+                    finish->Render(),
                     text(" "),
                     back->Render()
                 }) | hcenter,
+
+                text(workout_state) | color(Color::GrayLight) | hcenter,
+                text("Local sets saved: " + std::to_string(sets.size())) | color(Color::GrayLight) | hcenter,
+
+                plans_preview.empty()
+                    ? text("")
+                    : paragraph(plans_preview) | border,
 
                 response.empty()
                     ? text("")
@@ -565,7 +833,7 @@ private:
 
         screen.Loop(renderer);
     }
-    
+
     void add_measurement() {
         auto screen = ScreenInteractive::TerminalOutput();
 
@@ -678,6 +946,7 @@ private:
     }
 
 
+
     void get_plan() {
         auto screen = ScreenInteractive::TerminalOutput();
 
@@ -693,14 +962,8 @@ private:
             PlanDto plan = api_.getPlan();
             response = plan.rawResponse;
 
-            if (ClientApi::isError(plan.rawResponse)) {
-                response = plan.rawResponse;
-            }
-            else if (plan.plans.empty()) {
-                response = plan.rawResponse + "\n\nNo parsed plans found.";
-            }
-            else {
-                response = "Server response:\n" + plan.rawResponse + "\n\nParsed plans:\n";
+            if (!plan.plans.empty()) {
+                response += "\n\nParsed plans:\n";
 
                 for (size_t i = 0; i < plan.plans.size(); ++i) {
                     response += std::to_string(i + 1) + ". " + plan.plans[i] + "\n";
@@ -718,11 +981,8 @@ private:
 
         auto renderer = Renderer(container, [&] {
             return vbox({
-                text("Workout plan") | bold | color(Color::Cyan) | hcenter,
+                text("Get workout plan") | bold | color(Color::Cyan) | hcenter,
                 separator(),
-                text("Plan is generated for the currently logged-in user.")
-                    | color(Color::GrayLight)
-                    | hcenter,
                 hbox({
                     get->Render(),
                     text(" "),
@@ -737,84 +997,6 @@ private:
         screen.Loop(renderer);
     }
 
-    void get_exercises() {
-        auto screen = ScreenInteractive::TerminalOutput();
-
-        std::string response;
-
-        auto get = Button("Get exercises", [&] {
-            response = api_.getExercises();
-            message_ = response;
-            });
-
-        auto back = Button("Back", screen.ExitLoopClosure());
-
-        auto container = Container::Vertical({
-            Container::Horizontal({get, back})
-            });
-
-        auto renderer = Renderer(container, [&] {
-            return vbox({
-                text("Exercises") | bold | color(Color::Cyan) | hcenter,
-                separator(),
-                text("Shows exercises available from the server.")
-                    | color(Color::GrayLight)
-                    | hcenter,
-                hbox({
-                    get->Render(),
-                    text(" "),
-                    back->Render()
-                }) | hcenter,
-                response.empty()
-                    ? text("")
-                    : paragraph(response) | border
-                }) | border;
-            });
-
-        screen.Loop(renderer);
-    }
-    void get_measurements() {
-        auto screen = ScreenInteractive::TerminalOutput();
-
-        std::string response;
-
-        auto get = Button("Get measurements", [&] {
-            if (!auth_.loggedIn) {
-                response = "ERROR Not logged in locally. Use Login first.";
-                message_ = response;
-                return;
-            }
-
-            response = api_.getMeasurements();
-            message_ = response;
-            });
-
-        auto back = Button("Back", screen.ExitLoopClosure());
-
-        auto container = Container::Vertical({
-            Container::Horizontal({get, back})
-            });
-
-        auto renderer = Renderer(container, [&] {
-            return vbox({
-                text("Measurements") | bold | color(Color::Cyan) | hcenter,
-                separator(),
-                text("Shows body measurements for the currently logged-in user.")
-                    | color(Color::GrayLight)
-                    | hcenter,
-                hbox({
-                    get->Render(),
-                    text(" "),
-                    back->Render()
-                }) | hcenter,
-                response.empty()
-                    ? text("")
-                    : paragraph(response) | border
-                }) | border;
-            });
-
-        screen.Loop(renderer);
-    }
     void get_records() {
         auto screen = ScreenInteractive::TerminalOutput();
 
@@ -857,6 +1039,7 @@ private:
 
         screen.Loop(renderer);
     }
+
     void add_personal_record() {
         auto screen = ScreenInteractive::TerminalOutput();
 
@@ -948,6 +1131,7 @@ private:
 
         screen.Loop(renderer);
     }
+
     void get_sessions() {
         auto screen = ScreenInteractive::TerminalOutput();
 
@@ -1073,7 +1257,9 @@ private:
 
                 response.empty()
                     ? text("")
-                    : paragraph(response) | color(ClientApi::isOk(response) ? Color::Green : Color::Red) | border
+                    : paragraph(response)
+                        | color(ClientApi::isOk(response) ? Color::Green : Color::Red)
+                        | border
                 }) | border;
             });
 

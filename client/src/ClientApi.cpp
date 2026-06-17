@@ -5,23 +5,23 @@
 using json = nlohmann::json;
 
 namespace {
-std::string makeCommand(const json& request) {
-    return request.dump();
-}
-
-json parseResponse(const std::string& response) {
-    return json::parse(response);
-}
-
-bool hasStatus(const std::string& response, const std::string& status) {
-    try {
-        json parsed = parseResponse(response);
-        return parsed.contains("status") && parsed["status"].is_string() && parsed["status"] == status;
+    std::string makeCommand(const json& request) {
+        return request.dump();
     }
-    catch (...) {
-        return false;
+
+    json parseResponse(const std::string& response) {
+        return json::parse(response);
     }
-}
+
+    bool hasStatus(const std::string& response, const std::string& status) {
+        try {
+            json parsed = parseResponse(response);
+            return parsed.contains("status") && parsed["status"].is_string() && parsed["status"] == status;
+        }
+        catch (...) {
+            return false;
+        }
+    }
 }
 
 ClientApi::ClientApi(NetworkClient& network)
@@ -45,7 +45,7 @@ std::string ClientApi::login(const std::string& username, const std::string& pas
         {"command", "LOGIN"},
         {"username", username},
         {"password", password}
-    }));
+        }));
 }
 
 std::string ClientApi::logout() {
@@ -65,7 +65,7 @@ std::string ClientApi::getUser(const std::string& name) {
     return network_.sendCommand(makeCommand({
         {"command", "GET_USER"},
         {"name", name}
-    }));
+        }));
 }
 
 PlanDto ClientApi::getPlan() {
@@ -84,6 +84,7 @@ std::string ClientApi::ping() {
 std::string ClientApi::profile() {
     return network_.sendCommand(makeCommand({ {"command", "PROFILE"} }));
 }
+
 std::string ClientApi::getSessions() {
     return network_.sendCommand(makeCommand({ {"command", "GET_SESSIONS"} }));
 }
@@ -165,13 +166,27 @@ std::string ClientApi::createTrainingPlan(
         {"is_public", isPublic}
         }));
 }
+
 std::string ClientApi::createWorkoutSession(
     const std::string& description,
-    int trainingPlanId
+    int trainingPlanId,
+    const std::string& sessionJson
 ) {
+    json sessionData;
+
+    try {
+        sessionData = json::parse(sessionJson);
+    }
+    catch (...) {
+        sessionData = {
+            {"raw", sessionJson}
+        };
+    }
+
     json request = {
         {"command", "CREATE_WORKOUT_SESSION"},
-        {"description", description}
+        {"description", description},
+        {"session_data", sessionData}
     };
 
     if (trainingPlanId > 0) {
@@ -180,6 +195,7 @@ std::string ClientApi::createWorkoutSession(
 
     return network_.sendCommand(makeCommand(request));
 }
+
 std::string ClientApi::createMeasurement(
     double weightKg,
     double bodyFatPercentage,
@@ -198,6 +214,7 @@ std::string ClientApi::createMeasurement(
         {"leg_cm", legCm}
         }));
 }
+
 std::string ClientApi::createPersonalRecord(
     int exerciseId,
     double weightKg,
@@ -210,7 +227,6 @@ std::string ClientApi::createPersonalRecord(
         {"repetitions", repetitions}
         }));
 }
-
 
 bool ClientApi::isError(const std::string& response) {
     return hasStatus(response, "ERROR");
