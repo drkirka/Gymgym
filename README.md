@@ -1,41 +1,34 @@
-Gymgym
-Gymgym is a client-server fitness management application developed in C++. The project was created as a study project to demonstrate the implementation of a distributed application using modern C++ technologies, a PostgreSQL database, and a terminal-based user interface.
-The application allows users to manage workout plans, exercises, workout sessions, body measurements, and personal records. Communication between the client and the server is performed over TCP sockets, while all persistent data is stored in PostgreSQL.
-Project Architecture
-The project consists of two independent components:
-Server
-The server is responsible for:
+# Gymgym
 
-processing client requests;
-managing business logic;
-communicating with the PostgreSQL database;
-storing and retrieving application data;
-handling user authentication and fitness-related records.
+Gymgym is a client-server fitness management application written in C++. The project was developed as a study project to demonstrate client-server architecture, database integration, and modern C++ development practices.
 
-The server uses ODB ORM to map C++ classes to database tables.
-Client
-The client is a terminal application built with FTXUI. It provides an interactive interface for users and communicates with the server through a TCP connection.
-The client allows users to:
+The application allows users to manage training plans, workout sessions, exercises, body measurements, and personal records. Data is stored in PostgreSQL, while communication between the client and server is performed through TCP sockets.
 
-create and manage accounts;
-view and create training plans;
-browse exercises;
-create workout sessions;
-record body measurements;
-manage personal records.
+## Features
 
-Technologies
-The project is built using the following technologies:
+- User management
+- Training plan creation and management
+- Exercise database
+- Workout session tracking
+- Body measurements
+- Personal records
+- PostgreSQL database integration
+- Terminal-based user interface
 
-C++17
-CMake
-PostgreSQL
-ODB ORM
-FTXUI
-nlohmann/json
-Docker
+## Technologies
 
-Project Structure
+The project is built using:
+
+- C++17
+- CMake
+- PostgreSQL
+- ODB ORM
+- FTXUI
+- nlohmann/json
+- Docker
+
+## Project Structure
+
 Gymgym/
 ├── client/
 │   ├── include/
@@ -48,88 +41,107 @@ Gymgym/
 │   └── CMakeLists.txt
 │
 └── CMakeLists.txt
+## Requirements
 
-Requirements
-Before building the project, make sure the following tools are installed:
-General
+### General
 
-CMake 3.14 or newer
-C++17 compatible compiler
-Git
+- CMake 3.14+
+- C++17 compatible compiler
+- Git
 
-Server Dependencies
+### Server Dependencies
 
-PostgreSQL
-ODB Compiler
-libodb-dev
-libodb-pgsql-dev
-libodb-boost-dev
-libpq-dev
+- PostgreSQL
+- ODB Compiler
+- libodb-dev
+- libodb-pgsql-dev
+- libodb-boost-dev
+- libpq-dev
 
-Optional
+### Optional
 
-Docker
-Docker Compose
+- Docker
+- Docker Compose
 
-Building the Project
-Build the Server
+## Build
+
+### Build the Server
+
 cmake -S server -B build-server
 cmake --build build-server --target GymgymServer -j
+### Build the Client
 
-Build the Client
 cmake -S client -B build-client
 cmake --build build-client -j
+### Build the Entire Project
 
-Build Everything
 cmake -S . -B build
 cmake --build build -j
+## Running the Application
 
-Running the Application
-The application is typically started using two terminal windows.
-Terminal 1 – Database and Server
-Start the PostgreSQL database:
+The application can be started using two terminal windows.
+
+### Terminal 1
+
+Start the database:
+
 docker compose up db
+or
 
-or start an existing container:
+```bash
 docker start gymgym-db
 
-After the database is running, start the server:
+Then start the server:
+
+bash
 ./build-server/GymgymServer
 
-The server listens for incoming client connections on port 8080.
-Terminal 2 – Client
-Run the client application:
+The server listens on port `8080`.
+
+### Terminal 2
+
+Run the client:
+
+bash
 GYMGYM_HOST=127.0.0.1 GYMGYM_PORT=8080 ./build-client/gymgym_client
 
 The client will connect to the server and provide an interactive terminal interface.
-Database
+
+## Database
+
 The server uses PostgreSQL as the primary storage system.
-Current default configuration:
+
+Default configuration:
+
+text
 Host: db
 Database: postgres
 Username: postgres
 Password: pass
+`
 
 The database stores information about:
 
-users;
-exercises;
-equipment;
-training plans;
-workout sessions;
-body measurements;
-personal records.
+- Users
+- Exercises
+- Equipment
+- Training plans
+- Workout sessions
+- Body measurements
+- Personal records
 
-Educational Purpose
-This project was developed to practice:
+## Educational Purpose
 
-object-oriented design in C++;
-client-server architecture;
-database integration;
-ORM usage with ODB;
-socket programming;
-modern CMake project organization;
-terminal user interface development.
+This project was created to practice:
 
-Authors
-Gymgym development team.
+- Object-oriented programming in C++
+- Client-server application development
+- Database integration
+- ORM usage with ODB
+- Socket programming
+- Modern CMake project organization
+- Terminal user interface development
+
+## Authors
+
+Developed as an educational software engineering project.
