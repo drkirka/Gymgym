@@ -35,9 +35,13 @@ std::string TrainingPlanHandler::getPlan(const ClientSession& session) {
 
     for (const auto& plan : plans) {
         json p;
+        p["id"] = plan.id();
         p["name"] = plan.name();
         p["description"] = plan.description();
         p["duration"] = plan.durationMinutes();
+        p["difficulty"] = plan.difficultyLevel();
+        p["is_public"] = plan.isPublic();
+
         response["plans"].push_back(p);
     }
 

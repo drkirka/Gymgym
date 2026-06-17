@@ -121,11 +121,18 @@ PlanDto ClientApi::parsePlanResponse(const std::string& response) {
                 dto.plans.push_back(item.get<std::string>());
             }
             else if (item.is_object()) {
+                int id = item.value("id", 0);
                 std::string name = item.value("name", "");
                 std::string description = item.value("description", "");
                 int duration = item.value("duration", 0);
 
-                std::string planText = name;
+                std::string planText;
+
+                if (id > 0) {
+                    planText += "id " + std::to_string(id) + " - ";
+                }
+
+                planText += name;
 
                 if (!description.empty()) {
                     planText += " - " + description;

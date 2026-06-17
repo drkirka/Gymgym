@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <nlohmann/json.hpp>
 
 #include <optional>
 #include <sstream>
@@ -39,6 +40,103 @@ int get_env_int(const char* key, int fallback) {
 bool is_safe_token(const std::string& value) {
     return !value.empty() &&
         value.find_first_of("\t\r\n|") == std::string::npos;
+}
+/// helpers so no raw json
+static std::string formatMeasurementsResponse(const std::string& raw) {
+    try {
+        auto json = nlohmann::json::parse(raw);
+
+        if (json.value("status", "") != "OK") {
+            return raw;
+        }
+
+        if (!json.contains("measurements") || !json["measurements"].is_array()) {
+            return raw;
+        }
+
+        std::ostringstream out;
+        int index = 1;
+
+        for (const auto& measurement : json["measurements"]) {
+            out << index++ << ". Measurement";
+
+            if (measurement.contains("id")) {
+                out << " #" << measurement.value("id", 0);
+            }
+
+            out << "\n";
+
+            out << "   Weight: "
+                << measurement.value("weight", 0.0)
+                << " kg\n";
+
+            out << "   Body fat: "
+                << measurement.value("body_fat", 0.0)
+                << " %\n";
+
+            out << "   Chest: "
+                << measurement.value("chest", 0.0)
+                << " cm\n";
+
+            out << "   Waist: "
+                << measurement.value("waist", 0.0)
+                << " cm\n";
+
+            out << "   Arm: "
+                << measurement.value("arm", 0.0)
+                << " cm\n";
+
+            out << "   Leg: "
+                << measurement.value("leg", 0.0)
+                << " cm\n\n";
+        }
+
+        return out.str();
+    }
+    catch (...) {
+        return raw;
+    }
+}
+
+
+static std::string formatExercisesResponse(const std::string& raw) {
+    try {
+        auto json = nlohmann::json::parse(raw);
+
+        if (json.value("status", "") != "OK") {
+            return raw;
+        }
+
+        if (!json.contains("exercises") || !json["exercises"].is_array()) {
+            return raw;
+        }
+
+        std::ostringstream out;
+        int index = 1;
+
+        for (const auto& exercise : json["exercises"]) {
+            out << index++ << ". "
+                << exercise.value("name", "Unknown exercise")
+                << "\n";
+
+            out << "   Description: "
+                << exercise.value("description", "")
+                << "\n";
+
+            out << "   Intensity: "
+                << exercise.value("intensity", 0)
+                << "\n";
+
+            out << "   Difficulty: "
+                << exercise.value("difficulty", 0)
+                << "\n\n";
+        }
+
+        return out.str();
+    }
+    catch (...) {
+        return raw;
+    }
 }
 
 class App {
@@ -575,16 +673,18 @@ private:
                 return;
             }
 
-            plans_preview = "Saved training plans loaded locally:\n";
+            plans_preview = "Saved training plans:\n\n";
 
             for (size_t i = 0; i < loaded_plans.size(); ++i) {
                 std::string entry = std::to_string(i + 1) + ". " + loaded_plans[i];
+
                 plan_menu_entries.push_back(entry);
                 plans_preview += entry + "\n";
             }
 
-            plans_preview += "\nSelect one plan below. If the plan id is not visible in the text, enter it manually.";
-            response = "OK Loaded " + std::to_string(loaded_plans.size()) + " saved training plan(s) locally.";
+            plans_preview += "\nSelect one plan below, then press Start workout.";
+            response = "OK Loaded " + std::to_string(loaded_plans.size()) + " saved training plan(s).";
+            message_ = response;
             });
 
         auto start_workout = Button("Start workout", [&] {
@@ -833,7 +933,93 @@ private:
 
         screen.Loop(renderer);
     }
+    void get_measurements() {
+        auto screen = ScreenInteractive::TerminalOutput();
 
+        std::string response;
+
+        auto get = Button("Get measurements", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            auto raw = api_.getMeasurements();
+            response = formatMeasurementsResponse(raw);
+            message_ = response;
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            Container::Horizontal({get, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                text("Measurements") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+                text("Shows body measurements for the currently logged-in user.")
+                    | color(Color::GrayLight)
+                    | hcenter,
+                hbox({
+                    get->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+                response.empty()
+                    ? text("")
+                    : paragraph(response) | border
+                }) | border;
+            });
+
+        screen.Loop(renderer);
+    }
+
+    void get_exercises() {
+        auto screen = ScreenInteractive::TerminalOutput();
+
+        std::string response;
+
+        auto get = Button("Get exercises", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            auto raw = api_.getExercises();
+            response = formatExercisesResponse(raw);
+            message_ = response;
+            });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            Container::Horizontal({get, back})
+            });
+
+        auto renderer = Renderer(container, [&] {
+            return vbox({
+                text("Exercises") | bold | color(Color::Cyan) | hcenter,
+                separator(),
+                text("Shows available exercises from server.")
+                    | color(Color::GrayLight)
+                    | hcenter,
+                hbox({
+                    get->Render(),
+                    text(" "),
+                    back->Render()
+                }) | hcenter,
+                response.empty()
+                    ? text("")
+                    : paragraph(response) | border
+                }) | border;
+            });
+
+        screen.Loop(renderer);
+    }
     void add_measurement() {
         auto screen = ScreenInteractive::TerminalOutput();
 
@@ -959,17 +1145,28 @@ private:
                 return;
             }
 
-            PlanDto plan = api_.getPlan();
-            response = plan.rawResponse;
+            PPlanDto plan = api_.getPlan();
 
-            if (!plan.plans.empty()) {
-                response += "\n\nParsed plans:\n";
+            if (ClientApi::isError(plan.rawResponse)) {
+                response = plan.rawResponse;
+                message_ = response;
+                return;
+            }
+
+            std::ostringstream out;
+
+            if (plan.plans.empty()) {
+                out << "No saved training plans found.";
+            }
+            else {
+                out << "Saved training plans:\n\n";
 
                 for (size_t i = 0; i < plan.plans.size(); ++i) {
-                    response += std::to_string(i + 1) + ". " + plan.plans[i] + "\n";
+                    out << (i + 1) << ". " << plan.plans[i] << "\n";
                 }
             }
 
+            response = out.str();
             message_ = response;
             });
 

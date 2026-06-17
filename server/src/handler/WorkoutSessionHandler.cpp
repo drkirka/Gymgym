@@ -61,10 +61,11 @@ std::string WorkoutSessionHandler::createSession(const json& request, const Clie
         return response.dump() + "\n";
     }
 
-    std::string description = request.value("description", "");
+    sstd::string description = request.value("description", "");
+    std::uint64_t trainingPlanId = request.value("training_plan_id", 0);
 
     try {
-        auto created = sessionService_.create(user->id(), description, 0);
+        auto created = sessionService_.create(user->id(), description, trainingPlanId);
         response["status"] = "OK";
         response["message"] = "Workout session created";
         response["session_id"] = created.id();
