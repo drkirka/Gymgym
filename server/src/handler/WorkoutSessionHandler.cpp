@@ -61,7 +61,7 @@ std::string WorkoutSessionHandler::createSession(const json& request, const Clie
         return response.dump() + "\n";
     }
 
-    sstd::string description = request.value("description", "");
+    std::string description = request.value("description", "");
     std::uint64_t trainingPlanId = request.value("training_plan_id", 0);
 
     try {
