@@ -97,8 +97,101 @@ static std::string formatMeasurementsResponse(const std::string& raw) {
         return raw;
     }
 }
+//helper 
+static std::string formatRecordsResponse(const std::string& raw) {
+    try {
+        auto json = nlohmann::json::parse(raw);
+
+        if (json.value("status", "") != "OK") {
+            return raw;
+        }
+
+        if (!json.contains("records") || !json["records"].is_array()) {
+            return raw;
+        }
+
+        std::ostringstream out;
+        int index = 1;
+
+        for (const auto& record : json["records"]) {
+            out << index++ << ". Personal record";
+
+            if (record.contains("id")) {
+                out << " #" << record.value("id", 0);
+            }
+
+            out << "\n";
+
+            if (record.contains("exercise_id")) {
+                out << "   Exercise ID: " << record.value("exercise_id", 0) << "\n";
+            }
+
+            if (record.contains("exercise_name")) {
+                out << "   Exercise: " << record.value("exercise_name", "") << "\n";
+            }
+
+            out << "   Weight: " << record.value("weight", 0.0) << " kg\n";
+            out << "   Repetitions: " << record.value("repetitions", 0) << "\n";
 
 
+            if (record.contains("created_at")) {
+                out << "   Date: " << record.value("created_at", "") << "\n";
+            }
+
+            out << "\n";
+        }
+
+        return out.str();
+    }
+    catch (...) {
+        return raw;
+    }
+}
+static std::string formatSessionsResponse(const std::string& raw) {
+    try {
+        auto json = nlohmann::json::parse(raw);
+
+        if (json.value("status", "") != "OK") {
+            return raw;
+        }
+
+        if (!json.contains("sessions") || !json["sessions"].is_array()) {
+            return raw;
+        }
+
+        std::ostringstream out;
+        int index = 1;
+
+        for (const auto& session : json["sessions"]) {
+            out << index++ << ". Workout session";
+
+            if (session.contains("id")) {
+                out << " #" << session.value("id", 0);
+            }
+
+            out << "\n";
+
+            if (session.contains("description")) {
+                out << "   Description: " << session.value("description", "") << "\n";
+            }
+
+            if (session.contains("training_plan_id")) {
+                out << "   Training plan ID: " << session.value("training_plan_id", 0) << "\n";
+            }
+
+            if (session.contains("created_at")) {
+                out << "   Date: " << session.value("created_at", "") << "\n";
+            }
+
+            out << "\n";
+        }
+
+        return out.str();
+    }
+    catch (...) {
+        return raw;
+    }
+}
 static std::string formatExercisesResponse(const std::string& raw) {
     try {
         auto json = nlohmann::json::parse(raw);
@@ -508,6 +601,7 @@ private:
 
             if (name.empty() || duration.empty() || difficulty.empty()) {
                 response = "ERROR Name, duration and difficulty are required";
+                message_ = response;
                 return;
             }
 
@@ -533,13 +627,31 @@ private:
                 return;
             }
 
-            response = api_.createTrainingPlan(
+            auto raw = api_.createTrainingPlan(
                 name,
                 description,
                 duration_value,
                 difficulty_value,
                 is_public
             );
+
+            try {
+                auto json = nlohmann::json::parse(raw);
+
+                if (json.value("status", "") == "OK") {
+                    response = "OK Training plan created successfully.";
+
+                    if (json.contains("plan_id")) {
+                        response += "\nPlan ID: " + std::to_string(json.value("plan_id", 0));
+                    }
+                }
+                else {
+                    response = raw;
+                }
+            }
+            catch (...) {
+                response = raw;
+            }
 
             message_ = response;
             });
@@ -768,21 +880,25 @@ private:
             }
             catch (...) {
                 response = "ERROR Exercise id, weight and repetitions must be numbers";
+                message_ = response;
                 return;
             }
 
             if (exercise_value <= 0) {
                 response = "ERROR Exercise id must be positive";
+                message_ = response;
                 return;
             }
 
             if (weight_value <= 0) {
                 response = "ERROR Weight must be positive";
+                message_ = response;
                 return;
             }
 
             if (reps_value <= 0) {
                 response = "ERROR Repetitions must be positive";
+                message_ = response;
                 return;
             }
 
@@ -1060,10 +1176,11 @@ private:
 
                 if (body_fat_value < 0 || body_fat_value > 100) {
                     response = "ERROR Body fat must be between 0 and 100";
+                    message_ = response;
                     return;
                 }
 
-                response = api_.createMeasurement(
+                auto raw = api_.createMeasurement(
                     weight_value,
                     body_fat_value,
                     chest_value,
@@ -1072,10 +1189,29 @@ private:
                     leg_value
                 );
 
+                try {
+                    auto json = nlohmann::json::parse(raw);
+
+                    if (json.value("status", "") == "OK") {
+                        response = "OK Measurement created successfully.";
+
+                        if (json.contains("measurement_id")) {
+                            response += "\nMeasurement ID: " + std::to_string(json.value("measurement_id", 0));
+                        }
+                    }
+                    else {
+                        response = raw;
+                    }
+                }
+                catch (...) {
+                    response = raw;
+                }
+
                 message_ = response;
             }
             catch (...) {
                 response = "ERROR All fields must be numbers";
+                message_ = response;
             }
             });
 
@@ -1193,6 +1329,7 @@ private:
 
         screen.Loop(renderer);
     }
+	//helper for get_records() to format the response
 
     void get_records() {
         auto screen = ScreenInteractive::TerminalOutput();
@@ -1206,7 +1343,8 @@ private:
                 return;
             }
 
-            response = api_.getRecords();
+            auto raw = api_.getRecords();
+            response = formatRecordsResponse(raw);
             message_ = response;
             });
 
@@ -1268,6 +1406,7 @@ private:
 
                 if (weight_value <= 0) {
                     response = "ERROR Weight must be positive";
+                    message_ = response;
                     return;
                 }
 
@@ -1276,16 +1415,35 @@ private:
                     return;
                 }
 
-                response = api_.createPersonalRecord(
+                auto raw = api_.createPersonalRecord(
                     exercise_value,
                     weight_value,
                     reps_value
                 );
 
+                try {
+                    auto json = nlohmann::json::parse(raw);
+
+                    if (json.value("status", "") == "OK") {
+                        response = "OK Personal record created successfully.";
+
+                        if (json.contains("record_id")) {
+                            response += "\nRecord ID: " + std::to_string(json.value("record_id", 0));
+                        }
+                    }
+                    else {
+                        response = raw;
+                    }
+                }
+                catch (...) {
+                    response = raw;
+                }
+
                 message_ = response;
             }
             catch (...) {
                 response = "ERROR Exercise id, weight and repetitions must be numbers";
+                message_ = response;
             }
             });
 
@@ -1341,7 +1499,8 @@ private:
                 return;
             }
 
-            response = api_.getSessions();
+            auto raw = api_.getSessions();
+            response = formatSessionsResponse(raw);
             message_ = response;
             });
 
