@@ -106,11 +106,7 @@ PlanDto ClientApi::parsePlanResponse(const std::string& response) {
     dto.rawResponse = response;
 
     try {
-        json parsed = parseResponse(response);
-
-        if (!parsed.contains("status") || parsed["status"] != "OK") {
-            return dto;
-        }
+        auto parsed = nlohmann::json::parse(response);
 
         if (!parsed.contains("plans") || !parsed["plans"].is_array()) {
             return dto;
