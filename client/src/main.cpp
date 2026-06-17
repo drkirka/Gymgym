@@ -1145,7 +1145,7 @@ private:
                 return;
             }
 
-            PPlanDto plan = api_.getPlan();
+            PlanDto plan = api_.getPlan();
 
             if (ClientApi::isError(plan.rawResponse)) {
                 response = plan.rawResponse;
