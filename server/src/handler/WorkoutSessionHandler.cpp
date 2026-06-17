@@ -44,4 +44,36 @@ std::string WorkoutSessionHandler::getSessions(const ClientSession& session) {
     return response.dump() + "\n";
 }
 
-} // namespace server::handler 
+std::string WorkoutSessionHandler::createSession(const json& request, const ClientSession& session) {
+    json response;
+
+    if (!session.isAuthenticated) {
+        response["status"] = "ERROR";
+        response["message"] = "Not logged in";
+        return response.dump() + "\n";
+    }
+
+    auto user = userService_.findByName(session.username);
+
+    if (!user.has_value()) {
+        response["status"] = "ERROR";
+        response["message"] = "User not found";
+        return response.dump() + "\n";
+    }
+
+    std::string description = request.value("description", "");
+
+    try {
+        auto created = sessionService_.create(user->id(), description, 0);
+        response["status"] = "OK";
+        response["message"] = "Workout session created";
+        response["session_id"] = created.id();
+    } catch (const std::exception& ex) {
+        response["status"] = "ERROR";
+        response["message"] = ex.what();
+    }
+
+    return response.dump() + "\n";
+}
+
+} // namespace server::handler

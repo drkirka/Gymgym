@@ -90,6 +90,10 @@ std::string RequestRouter::route(const std::string& request, ClientSession& sess
         return planHandler_.getPlan(session);
     }
 
+    if (command == "CREATE_TRAINING_PLAN") {
+        return planHandler_.createPlan(parsed, session);
+    }
+
     if (command == "GET_EXERCISES") {
         return exerciseHandler_.getExercises(session);
     }
@@ -98,12 +102,24 @@ std::string RequestRouter::route(const std::string& request, ClientSession& sess
         return sessionHandler_.getSessions(session);
     }
 
+    if (command == "CREATE_WORKOUT_SESSION") {
+        return sessionHandler_.createSession(parsed, session);
+    }
+
     if (command == "GET_MEASUREMENTS") {
         return measurementHandler_.getMeasurements(session);
     }
 
+    if (command == "CREATE_MEASUREMENT") {
+        return measurementHandler_.createMeasurement(parsed, session);
+    }
+
     if (command == "GET_RECORDS") {
         return recordHandler_.getRecords(session);
+    }
+
+    if (command == "CREATE_PERSONAL_RECORD") {
+        return recordHandler_.createRecord(parsed, session);
     }
 
     if (command == "GET_MUSCLES") {

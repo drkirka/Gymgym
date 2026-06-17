@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include <nlohmann/json.hpp>
+
 #include "server/core/session.h"
 #include "server/service/UserService.h"
 #include "server/service/PersonalRecordService.h"
@@ -14,6 +16,7 @@ namespace server::handler {
             server::service::PersonalRecordService& recordService);
 
         std::string getRecords(const ClientSession& session);
+        std::string createRecord(const nlohmann::json& request, const ClientSession& session);
 
     private:
         server::service::UserService& userService_;

@@ -3,8 +3,8 @@
 #include <memory>
 
 #include "server/core/gym_state.h"
-#include "db/Database.h"
 #include "BcryptHasher.h"
+#include "db/Database.h"
 
 namespace server::network {
 
@@ -20,6 +20,7 @@ namespace server::network {
         int serverSocket_;
         std::shared_ptr<GymState> gymState_;
         server::db::Database& database_;
+        server::util::BcryptHasher hasher_;
     };
 
-} // namespace server::network 
+} // namespace server::network

@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include <nlohmann/json.hpp>
+
 #include "server/core/session.h"
 #include "server/service/UserService.h"
 #include "server/service/WorkoutSessionService.h"
@@ -14,6 +16,7 @@ namespace server::handler {
             server::service::WorkoutSessionService& sessionService);
 
         std::string getSessions(const ClientSession& session);
+        std::string createSession(const nlohmann::json& request, const ClientSession& session);
 
     private:
         server::service::UserService& userService_;

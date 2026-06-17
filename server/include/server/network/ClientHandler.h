@@ -4,8 +4,8 @@
 
 #include "server/core/gym_state.h"
 #include "server/handler/RequestRouter.h"
+#include "IPasswordHasher.h"
 #include "db/Database.h"
-#include "BcryptHasher.h"
 
 namespace server::network {
 
@@ -22,4 +22,4 @@ namespace server::network {
         ClientSession session_;
     };
 
-} // namespace server::network 
+} // namespace server::network

@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
+
+#include <nlohmann/json.hpp>
 
 #include "server/core/session.h"
 #include "server/service/UserService.h"
@@ -14,6 +17,7 @@ namespace server::handler {
             server::service::TrainingPlanService& planService);
 
         std::string getPlan(const ClientSession& session);
+        std::string createPlan(const nlohmann::json& request, const ClientSession& session);
 
     private:
         server::service::UserService& userService_;
