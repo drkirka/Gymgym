@@ -1,7 +1,6 @@
 # Gymgym
 
-Gymgym is a client-server fitness management application written in C++. The project was developed as a study project to demonstrate client-server architecture, database integration, and modern C++ development practices.
-
+It's a client-server fitness management application written in C++. The project was developed as a study project to demonstrate client-server architecture, database integration, and modern C++ development practices.
 The application allows users to manage training plans, workout sessions, exercises, body measurements, and personal records. Data is stored in PostgreSQL, while communication between the client and server is performed through TCP sockets.
 
 ## Features
@@ -29,7 +28,8 @@ The project is built using:
 
 ## Project Structure
 
-Gymgym/
+Gymgym
+/
 ├── client/
 │   ├── include/
 │   ├── src/
@@ -97,6 +97,7 @@ bash
 ./build-server/GymgymServer
 
 The server listens on port `8080`.
+```
 
 ### Terminal 2
 
