@@ -18,6 +18,7 @@ public:
     std::string createUser(const UserDto& user);
     std::string getUser(const std::string& name);
     PlanDto getPlan();
+    std::string getTrainingPlanDetails(int planId);
     std::string serverStatus();
     std::string ping();
     std::string profile();
@@ -37,6 +38,11 @@ public:
         const std::string& description,
         int trainingPlanId,
         const std::string& sessionJson
+    );
+
+    std::string completeWorkoutSession(
+        int sessionId,
+        const std::string& setsJson
     );
 
     std::string createMeasurement(

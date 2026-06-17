@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -17,8 +18,12 @@ namespace server::handler {
 
         std::string getSessions(const ClientSession& session);
         std::string createSession(const nlohmann::json& request, const ClientSession& session);
+        std::string completeSession(const nlohmann::json& request, const ClientSession& session);
 
     private:
+        nlohmann::json makeSessionJson(const server::db::WorkoutSessionRecord& session) const;
+        nlohmann::json makeSessionDetailsJson(const server::db::WorkoutSessionRecord& session) const;
+
         server::service::UserService& userService_;
         server::service::WorkoutSessionService& sessionService_;
     };

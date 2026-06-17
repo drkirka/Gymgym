@@ -69,8 +69,15 @@ std::string ClientApi::getUser(const std::string& name) {
 }
 
 PlanDto ClientApi::getPlan() {
-    std::string response = network_.sendCommand(makeCommand({ {"command", "GET_PLAN"} }));
+    std::string response = network_.sendCommand(makeCommand({ {"command", "GET_TRAINING_PLANS"} }));
     return parsePlanResponse(response);
+}
+
+std::string ClientApi::getTrainingPlanDetails(int planId) {
+    return network_.sendCommand(makeCommand({
+        {"command", "GET_TRAINING_PLAN_DETAILS"},
+        {"plan_id", planId}
+        }));
 }
 
 std::string ClientApi::serverStatus() {
@@ -123,9 +130,13 @@ PlanDto ClientApi::parsePlanResponse(const std::string& response) {
             else if (item.is_object()) {
                 std::string name = item.value("name", "");
                 std::string description = item.value("description", "");
+                int id = item.value("id", 0);
                 int duration = item.value("duration", 0);
+                int difficulty = item.value("difficulty", 0);
+                bool isPublic = item.value("is_public", false);
+                bool isOwner = item.value("is_owner", false);
 
-                std::string planText = name;
+                std::string planText = id > 0 ? "#" + std::to_string(id) + " " + name : name;
 
                 if (!description.empty()) {
                     planText += " - " + description;
@@ -134,6 +145,13 @@ PlanDto ClientApi::parsePlanResponse(const std::string& response) {
                 if (duration > 0) {
                     planText += " (" + std::to_string(duration) + " min)";
                 }
+
+                if (difficulty > 0) {
+                    planText += " | difficulty " + std::to_string(difficulty);
+                }
+
+                planText += isPublic ? " | public" : " | private";
+                planText += isOwner ? " | own" : " | shared";
 
                 dto.plans.push_back(planText);
             }
@@ -194,6 +212,26 @@ std::string ClientApi::createWorkoutSession(
     }
 
     return network_.sendCommand(makeCommand(request));
+}
+
+std::string ClientApi::completeWorkoutSession(
+    int sessionId,
+    const std::string& setsJson
+) {
+    json sets;
+
+    try {
+        sets = json::parse(setsJson);
+    }
+    catch (...) {
+        sets = json::array();
+    }
+
+    return network_.sendCommand(makeCommand({
+        {"command", "COMPLETE_WORKOUT_SESSION"},
+        {"session_id", sessionId},
+        {"sets", sets}
+        }));
 }
 
 std::string ClientApi::createMeasurement(

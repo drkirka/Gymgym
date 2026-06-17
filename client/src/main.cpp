@@ -11,11 +11,22 @@
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
 
+
 #include "NetworkClient.h"
 #include "ClientApi.h"
 #include "UserDto.h"
 #include "AuthState.h"
 #include "PlanDto.h"
+#include "MeasurementDto.h"
+#include "MeasurementView.h"
+#include "ExerciseDto.h"
+#include "ExerciseView.h"
+#include "TrainingPlanDto.h"
+#include "TrainingPlanView.h"
+#include "WorkoutSessionDto.h"
+#include "WorkoutSessionView.h"
+#include "PersonalRecordDto.h"
+#include "PersonalRecordView.h"
 
 using namespace ftxui;
 
@@ -59,7 +70,7 @@ public:
     }
 
     void run() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
         int selected = 0;
 
@@ -68,11 +79,11 @@ public:
             "Raw GET_USER request",
             "Local cache",
 
-            "Get workout plan",
+            "Training plans",
             "Create training plan",
 
             "My workout sessions",
-            "Start workout",
+            "Start workout from plan",
 
             "Exercises",
 
@@ -185,7 +196,7 @@ private:
     }
 
     void create_user() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
         std::string name;
         std::string email;
@@ -290,7 +301,7 @@ private:
     }
 
     void get_user_from_server() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
         std::string name;
         std::string response;
@@ -339,7 +350,7 @@ private:
         screen.Loop(renderer);
     }
     void view_cache() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
         auto back = Button("Back", screen.ExitLoopClosure());
 
@@ -378,7 +389,7 @@ private:
 
             rows.push_back(back->Render() | hcenter);
 
-            return vbox(rows) | border;
+            return vbox(rows) | border | vscroll_indicator | yframe | flex;
             });
 
         screen.Loop(renderer);
@@ -386,7 +397,7 @@ private:
 
 
     void create_training_plan() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
         std::string name;
         std::string description;
@@ -523,319 +534,437 @@ private:
     }
 
     void create_workout_session() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
-        std::string description = "Workout completed from client";
-        std::string manual_training_plan_id;
-        std::string exercise_id;
-        std::string weight;
-        std::string repetitions;
         std::string response;
-        std::string plans_preview;
+        std::string parse_error;
+        std::string description = "Workout from selected plan";
+        std::string reps_input_value;
+        std::string weight_input_value;
+        std::string rest_input_value;
+        std::string notes_input_value;
+        std::string set_number_input_value = "1";
 
-        std::vector<std::string> loaded_plans;
+        std::vector<TrainingPlanDto> plans;
         std::vector<std::string> plan_menu_entries;
-        std::vector<std::string> sets;
+        std::vector<std::string> plan_exercise_menu_entries;
+        TrainingPlanDto opened_plan;
+        WorkoutSessionDto active_session;
+        std::vector<WorkoutSetSelection> set_selections;
 
         int selected_plan = 0;
-        int set_number = 1;
-        int active_plan_id = 0;
-        bool workout_started = false;
-        bool workout_sent = false;
+        int selected_plan_exercise = 0;
+        int selected_set = 0;
+        bool plans_loaded = false;
+        bool plan_opened = false;
+        bool session_started = false;
+        bool session_completed = false;
+        int workout_view_mode = 0; // 0 = choose/open plan, 1 = active/completed workout only
 
         auto description_input = Input(&description, "description");
-        auto manual_plan_input = Input(&manual_training_plan_id, "manual plan id fallback");
-        auto exercise_input = Input(&exercise_id, "exercise id");
-        auto weight_input = Input(&weight, "weight kg");
-        auto reps_input = Input(&repetitions, "repetitions");
-        auto plan_menu_component = Menu(&plan_menu_entries, &selected_plan);
+        auto reps_input = Input(&reps_input_value, "actual repetitions");
+        auto weight_input = Input(&weight_input_value, "actual weight kg");
+        auto rest_input = Input(&rest_input_value, "rest seconds");
+        auto notes_input = Input(&notes_input_value, "notes optional");
+        auto set_number_input = Input(&set_number_input_value, "set number");
+        auto plan_menu = Menu(&plan_menu_entries, &selected_plan);
+        auto plan_exercise_menu = Menu(&plan_exercise_menu_entries, &selected_plan_exercise);
 
-        auto load_plans = Button("Load saved plans", [&] {
-            if (!auth_.loggedIn) {
-                response = "ERROR Not logged in locally. Use Login first.";
-                message_ = response;
-                return;
+        auto refresh_set_menu = [&] {
+            set_selections = workout_set_selections(active_session);
+
+            if (selected_set < 0 || selected_set >= static_cast<int>(set_selections.size())) {
+                selected_set = 0;
             }
 
-            PlanDto plan = api_.getPlan();
-
-            if (ClientApi::isError(plan.rawResponse)) {
-                response = plan.rawResponse;
-                plans_preview.clear();
-                return;
+            if (!set_selections.empty()) {
+                set_number_input_value = std::to_string(selected_set + 1);
             }
+        };
 
-            loaded_plans = plan.plans;
-            plan_menu_entries.clear();
-            selected_plan = 0;
-
-            if (loaded_plans.empty()) {
-                response = "ERROR No parsed training plans found. Server response:\n" + plan.rawResponse;
-                plans_preview.clear();
-                return;
+        auto select_set_from_input = [&] -> bool {
+            if (set_selections.empty()) {
+                return false;
             }
-
-            plans_preview = "Saved training plans loaded locally:\n";
-
-            for (size_t i = 0; i < loaded_plans.size(); ++i) {
-                std::string entry = std::to_string(i + 1) + ". " + loaded_plans[i];
-                plan_menu_entries.push_back(entry);
-                plans_preview += entry + "\n";
-            }
-
-            plans_preview += "\nSelect one plan below. If the plan id is not visible in the text, enter it manually.";
-            response = "OK Loaded " + std::to_string(loaded_plans.size()) + " saved training plan(s) locally.";
-            });
-
-        auto start_workout = Button("Start workout", [&] {
-            if (!auth_.loggedIn) {
-                response = "ERROR Not logged in locally. Use Login first.";
-                message_ = response;
-                return;
-            }
-
-            std::optional<int> parsed_plan_id;
-
-            if (!manual_training_plan_id.empty()) {
-                try {
-                    int manual_id = std::stoi(manual_training_plan_id);
-                    if (manual_id <= 0) {
-                        response = "ERROR Manual training plan id must be positive";
-                        return;
-                    }
-
-                    parsed_plan_id = manual_id;
-                }
-                catch (...) {
-                    response = "ERROR Manual training plan id must be a number";
-                    return;
-                }
-            }
-            else {
-                if (loaded_plans.empty()) {
-                    response = "ERROR Load saved plans first or enter a manual training plan id.";
-                    return;
-                }
-
-                if (selected_plan < 0 || selected_plan >= static_cast<int>(loaded_plans.size())) {
-                    response = "ERROR Select a valid training plan.";
-                    return;
-                }
-
-                parsed_plan_id = extract_first_positive_int(loaded_plans[static_cast<size_t>(selected_plan)]);
-
-                if (!parsed_plan_id.has_value()) {
-                    response = "ERROR Could not detect plan id from selected plan text. Enter plan id manually.";
-                    return;
-                }
-            }
-
-            active_plan_id = parsed_plan_id.value();
-            workout_started = true;
-            workout_sent = false;
-            sets.clear();
-            set_number = 1;
-
-            if (description.empty()) {
-                description = "Workout completed from client";
-            }
-
-            response =
-                "OK Workout started locally for training plan id " +
-                std::to_string(active_plan_id) +
-                ". Complete sets locally, then press Finish workout once.";
-            });
-
-        auto add_set = Button("Complete set locally", [&] {
-            if (!workout_started) {
-                response = "ERROR Press Start workout before adding sets.";
-                return;
-            }
-
-            if (exercise_id.empty() || weight.empty() || repetitions.empty()) {
-                response = "ERROR Exercise id, weight and repetitions are required";
-                return;
-            }
-
-            int exercise_value;
-            double weight_value;
-            int reps_value;
 
             try {
-                exercise_value = std::stoi(exercise_id);
-                weight_value = std::stod(weight);
-                reps_value = std::stoi(repetitions);
+                int requested = std::stoi(set_number_input_value);
+                if (requested < 1 || requested > static_cast<int>(set_selections.size())) {
+                    return false;
+                }
+                selected_set = requested - 1;
+                set_number_input_value = std::to_string(requested);
+                return true;
             }
             catch (...) {
-                response = "ERROR Exercise id, weight and repetitions must be numbers";
+                return false;
+            }
+        };
+
+        auto load_selected_set_into_inputs = [&] {
+            if (!select_set_from_input()) {
+                reps_input_value.clear();
+                weight_input_value.clear();
+                rest_input_value.clear();
+                notes_input_value.clear();
                 return;
             }
 
-            if (exercise_value <= 0) {
-                response = "ERROR Exercise id must be positive";
+            auto* set = selected_workout_set(active_session, set_selections[static_cast<std::size_t>(selected_set)]);
+            if (!set) {
                 return;
             }
 
-            if (weight_value <= 0) {
-                response = "ERROR Weight must be positive";
+            reps_input_value = std::to_string(set->repetitions > 0 ? set->repetitions : set->target_repetitions);
+            weight_input_value = format_plan_number(set->weight_kg > 0 ? set->weight_kg : set->target_weight_kg);
+            rest_input_value = std::to_string(set->rest_seconds > 0 ? set->rest_seconds : set->target_rest_seconds);
+            notes_input_value = set->notes;
+        };
+
+        auto load_plans = Button("Load plans", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            PlanDto raw_plan_response = api_.getPlan();
+            response = raw_plan_response.rawResponse;
+            plans = parse_training_plans_response(response, parse_error);
+            plan_menu_entries.clear();
+            plan_exercise_menu_entries.clear();
+            selected_plan = 0;
+            selected_plan_exercise = 0;
+            plans_loaded = true;
+            plan_opened = false;
+            session_started = false;
+            session_completed = false;
+            workout_view_mode = 0;
+            opened_plan = TrainingPlanDto{};
+            active_session = WorkoutSessionDto{};
+            set_selections.clear();
+            set_number_input_value = "1";
+
+            if (!parse_error.empty()) {
+                message_ = "ERROR " + parse_error;
+                return;
+            }
+
+            for (const auto& plan : plans) {
+                plan_menu_entries.push_back(training_plan_menu_label(plan));
+            }
+
+            message_ = "OK Loaded " + std::to_string(plans.size()) + " training plan(s).";
+        });
+
+        auto open_plan = Button("Open selected plan", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            if (plans.empty()) {
+                response = "ERROR Load plans first.";
+                return;
+            }
+
+            if (selected_plan < 0 || selected_plan >= static_cast<int>(plans.size())) {
+                response = "ERROR Select a valid training plan.";
+                return;
+            }
+
+            const auto plan_id = plans[static_cast<std::size_t>(selected_plan)].id;
+            response = api_.getTrainingPlanDetails(static_cast<int>(plan_id));
+            opened_plan = parse_training_plan_details_response(response, parse_error);
+
+            if (!parse_error.empty()) {
+                message_ = "ERROR " + parse_error;
+                plan_opened = false;
+                return;
+            }
+
+            plan_exercise_menu_entries.clear();
+            selected_plan_exercise = 0;
+            for (const auto& exercise : opened_plan.exercises) {
+                plan_exercise_menu_entries.push_back(training_plan_exercise_menu_label(exercise));
+            }
+
+            plan_opened = true;
+            session_started = false;
+            session_completed = false;
+            workout_view_mode = 0;
+            active_session = WorkoutSessionDto{};
+            set_selections.clear();
+            set_number_input_value = "1";
+            message_ = "OK Opened training plan #" + std::to_string(opened_plan.id) + ".";
+        });
+
+        auto start_session = Button("Start session", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            if (!plan_opened || opened_plan.id == 0) {
+                response = "ERROR Open a training plan first.";
+                return;
+            }
+
+            if (description.empty()) {
+                description = "Workout from selected plan";
+            }
+
+            response = api_.createWorkoutSession(description, static_cast<int>(opened_plan.id), "{}");
+            active_session = parse_workout_session_response(response, parse_error);
+
+            if (!parse_error.empty()) {
+                message_ = "ERROR " + parse_error;
+                session_started = false;
+                return;
+            }
+
+            refresh_set_menu();
+            load_selected_set_into_inputs();
+            session_started = true;
+            session_completed = false;
+            workout_view_mode = 1;
+            message_ = "OK Started workout session #" + std::to_string(active_session.id) + ".";
+        });
+
+        auto load_set = Button("Load selected set", [&] {
+            if (!session_started) {
+                response = "ERROR Start a session first.";
+                return;
+            }
+
+            load_selected_set_into_inputs();
+            response = "OK Loaded selected set values into the inputs.";
+        });
+
+        auto save_set_locally = Button("Save set locally", [&] {
+            if (!session_started) {
+                response = "ERROR Start a session first.";
+                return;
+            }
+
+            if (!select_set_from_input()) {
+                response = "ERROR Enter a valid set number from 1 to " + std::to_string(set_selections.size()) + ".";
+                return;
+            }
+
+            int reps_value;
+            double weight_value;
+            int rest_value = 0;
+
+            try {
+                reps_value = std::stoi(reps_input_value);
+                weight_value = std::stod(weight_input_value);
+                if (!rest_input_value.empty()) {
+                    rest_value = std::stoi(rest_input_value);
+                }
+            }
+            catch (...) {
+                response = "ERROR Repetitions, weight and rest must be numbers.";
                 return;
             }
 
             if (reps_value <= 0) {
-                response = "ERROR Repetitions must be positive";
+                response = "ERROR Repetitions must be positive.";
+                return;
+            }
+            if (weight_value < 0) {
+                response = "ERROR Weight must not be negative.";
+                return;
+            }
+            if (rest_value < 0) {
+                response = "ERROR Rest must not be negative.";
                 return;
             }
 
-            std::ostringstream set_json;
-            set_json
-                << "{\"exercise_id\":" << exercise_value
-                << ",\"set_number\":" << set_number
-                << ",\"weight_kg\":" << weight_value
-                << ",\"repetitions\":" << reps_value
-                << ",\"completed\":true}";
+            auto* set = selected_workout_set(active_session, set_selections[static_cast<std::size_t>(selected_set)]);
+            if (!set) {
+                response = "ERROR Selected set not found.";
+                return;
+            }
 
-            sets.push_back(set_json.str());
-            ++set_number;
+            set->repetitions = reps_value;
+            set->weight_kg = weight_value;
+            set->rest_seconds = rest_value;
+            set->notes = notes_input_value;
+            set->completed = true;
 
-            exercise_id.clear();
-            weight.clear();
-            repetitions.clear();
+            refresh_set_menu();
+            response = "OK Saved set locally. Press Complete workout to send all sets.";
+        });
 
-            response = "OK Set saved locally. Local sets: " + std::to_string(sets.size());
-            });
-
-        auto finish = Button("Finish workout", [&] {
+        auto complete_session = Button("Complete workout", [&] {
             if (!auth_.loggedIn) {
                 response = "ERROR Not logged in locally. Use Login first.";
                 message_ = response;
                 return;
             }
 
-            if (!workout_started) {
-                response = "ERROR Start a workout before finishing it.";
+            if (!session_started || active_session.id == 0) {
+                response = "ERROR Start a session first.";
                 return;
             }
 
-            if (sets.empty()) {
-                response = "ERROR Complete at least one set before finishing workout";
+            const std::string sets_json = build_complete_workout_sets_json(active_session);
+            response = api_.completeWorkoutSession(static_cast<int>(active_session.id), sets_json);
+            WorkoutSessionDto completed = parse_workout_session_response(response, parse_error);
+
+            if (!parse_error.empty()) {
+                message_ = "ERROR " + parse_error;
                 return;
             }
 
-            std::string session_json = "{\"sets\":[";
+            active_session = completed;
+            refresh_set_menu();
+            session_started = false;
+            session_completed = true;
+            workout_view_mode = 1;
+            message_ = "OK Workout session completed.";
+        });
 
-            for (size_t i = 0; i < sets.size(); ++i) {
-                if (i > 0) {
-                    session_json += ",";
-                }
+        auto back_setup = Button("Back", screen.ExitLoopClosure());
+        auto back_active = Button("Back", screen.ExitLoopClosure());
 
-                session_json += sets[i];
-            }
-
-            session_json += "]}";
-
-            response = api_.createWorkoutSession(description, active_plan_id, session_json);
-            message_ = response;
-
-            if (ClientApi::isOk(response)) {
-                workout_sent = true;
-                workout_started = false;
-            }
-            });
-
-        auto back = Button("Back", screen.ExitLoopClosure());
-
-        auto container = Container::Vertical({
+        auto setup_container = Container::Vertical({
             description_input,
-            manual_plan_input,
-            plan_menu_component,
-            exercise_input,
-            weight_input,
+            plan_menu,
+            plan_exercise_menu,
+            Container::Horizontal({load_plans, open_plan, start_session, back_setup})
+        });
+
+        auto active_container = Container::Vertical({
+            set_number_input,
             reps_input,
-            Container::Horizontal({load_plans, start_workout}),
-            Container::Horizontal({add_set, finish, back})
-            });
+            weight_input,
+            rest_input,
+            notes_input,
+            Container::Horizontal({load_set, save_set_locally, complete_session, back_active})
+        });
+
+        auto container = Container::Tab({
+            setup_container,
+            active_container
+        }, &workout_view_mode);
 
         auto renderer = Renderer(container, [&] {
-            std::string selected_plan_text = "Selected plan: ";
+            Elements rows;
+            rows.push_back(text("Start workout from training plan") | bold | color(Color::Cyan) | hcenter);
+            rows.push_back(separator());
+            if (session_started || session_completed) {
+                rows.push_back(text("Active workout mode: plan selection is hidden to keep this screen fast and focused.")
+                    | color(Color::GrayLight)
+                    | hcenter);
+                rows.push_back(separator());
+                rows.push_back(text(session_completed ? "Completed workout" : "Active workout") | bold | color(Color::Cyan) | hcenter);
+                rows.push_back(render_workout_session_draft(active_session));
 
-            if (loaded_plans.empty()) {
-                selected_plan_text += "none loaded";
-            }
-            else if (selected_plan >= 0 && selected_plan < static_cast<int>(loaded_plans.size())) {
-                selected_plan_text += loaded_plans[static_cast<size_t>(selected_plan)];
+                rows.push_back(text("Select set to edit") | color(Color::Yellow));
+                if (set_selections.empty()) {
+                    rows.push_back(text("No sets were generated from the selected plan.") | color(Color::Yellow) | hcenter);
+                }
+                else {
+                    rows.push_back(text("Set number: 1 - " + std::to_string(set_selections.size())) | color(Color::GrayLight));
+                    rows.push_back(set_number_input->Render() | border);
+                    rows.push_back(hbox({
+                        load_set->Render(),
+                        text(" "),
+                        save_set_locally->Render(),
+                        text(" "),
+                        complete_session->Render(),
+                        text(" "),
+                        back_active->Render()
+                    }) | hcenter);
+
+                    if (selected_set >= 0 && selected_set < static_cast<int>(set_selections.size())) {
+                        rows.push_back(render_workout_selected_set(
+                            active_session,
+                            set_selections[static_cast<std::size_t>(selected_set)],
+                            static_cast<std::size_t>(selected_set),
+                            set_selections.size()
+                        ));
+                    }
+
+                    rows.push_back(text("Actual repetitions") | color(Color::Yellow));
+                    rows.push_back(reps_input->Render() | border);
+                    rows.push_back(text("Actual weight kg") | color(Color::Yellow));
+                    rows.push_back(weight_input->Render() | border);
+                    rows.push_back(text("Rest seconds") | color(Color::Yellow));
+                    rows.push_back(rest_input->Render() | border);
+                    rows.push_back(text("Notes") | color(Color::Yellow));
+                    rows.push_back(notes_input->Render() | border);
+                }
             }
             else {
-                selected_plan_text += "invalid selection";
-            }
-
-            std::string workout_state =
-                workout_started
-                ? "Workout in progress. Active plan id: " + std::to_string(active_plan_id)
-                : workout_sent
-                ? "Workout sent to server."
-                : "Workout not started.";
-
-            return vbox({
-                text("Start workout") | bold | color(Color::Cyan) | hcenter,
-                separator(),
-
-                text("Flow: load saved plans -> select plan -> start workout -> complete sets locally -> one server call on Finish.")
+                rows.push_back(text("Demo flow: load plans -> open selected plan -> start session. After starting, only the active workout is displayed.")
                     | color(Color::GrayLight)
-                    | hcenter,
+                    | hcenter);
 
-                text("Description") | color(Color::Yellow),
-                description_input->Render() | border,
+                rows.push_back(text("Description") | color(Color::Yellow));
+                rows.push_back(description_input->Render() | border);
 
-                text("Manual Training Plan ID fallback") | color(Color::Yellow),
-                manual_plan_input->Render() | border,
-
-                text("Saved training plans") | color(Color::Yellow),
-                plan_menu_component->Render() | border,
-                paragraph(selected_plan_text) | color(Color::GrayLight),
-
-                text("Exercise ID") | color(Color::Yellow),
-                exercise_input->Render() | border,
-
-                text("Weight kg") | color(Color::Yellow),
-                weight_input->Render() | border,
-
-                text("Repetitions") | color(Color::Yellow),
-                reps_input->Render() | border,
-
-                hbox({
+                rows.push_back(hbox({
                     load_plans->Render(),
                     text(" "),
-                    start_workout->Render()
-                }) | hcenter,
-
-                hbox({
-                    add_set->Render(),
+                    open_plan->Render(),
                     text(" "),
-                    finish->Render(),
+                    start_session->Render(),
                     text(" "),
-                    back->Render()
-                }) | hcenter,
+                    back_setup->Render()
+                }) | hcenter);
 
-                text(workout_state) | color(Color::GrayLight) | hcenter,
-                text("Local sets saved: " + std::to_string(sets.size())) | color(Color::GrayLight) | hcenter,
+                rows.push_back(text("Training plans") | color(Color::Yellow));
+                if (plan_menu_entries.empty()) {
+                    rows.push_back(text(plans_loaded ? "No training plans available." : "Press Load plans first.") | color(Color::GrayLight) | hcenter);
+                }
+                else {
+                    rows.push_back(plan_menu->Render() | border);
+                }
 
-                plans_preview.empty()
-                    ? text("")
-                    : paragraph(plans_preview) | border,
+                if (plan_opened) {
+                    rows.push_back(separator());
+                    rows.push_back(text("Opened plan summary") | bold | color(Color::Cyan) | hcenter);
+                    rows.push_back(render_training_plan_details(opened_plan));
 
-                response.empty()
-                    ? text("")
-                    : paragraph(response)
-                        | color(ClientApi::isOk(response) ? Color::Green : Color::Red)
-                        | border
-                }) | border;
-            });
+                    if (plan_exercise_menu_entries.empty()) {
+                        rows.push_back(text("This plan has no exercises attached.") | color(Color::Yellow) | hcenter);
+                    }
+                    else {
+                        rows.push_back(text("Inspect plan exercise") | color(Color::Yellow));
+                        rows.push_back(plan_exercise_menu->Render() | border);
+                        if (selected_plan_exercise >= 0 && selected_plan_exercise < static_cast<int>(opened_plan.exercises.size())) {
+                            rows.push_back(render_training_plan_exercise_card(
+                                opened_plan.exercises[static_cast<std::size_t>(selected_plan_exercise)],
+                                static_cast<std::size_t>(selected_plan_exercise),
+                                opened_plan.exercises.size()
+                            ));
+                        }
+                    }
+                }
+            }
+
+            if (!response.empty()) {
+                rows.push_back(paragraph(response)
+                    | color(ClientApi::isOk(response) ? Color::Green : Color::Red)
+                    | border);
+            }
+
+            return vbox(rows) | border;
+        });
 
         screen.Loop(renderer);
     }
 
+
+
+
     void add_measurement() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
         std::string weight;
         std::string body_fat;
@@ -947,70 +1076,351 @@ private:
 
 
 
-    void get_plan() {
-        auto screen = ScreenInteractive::TerminalOutput();
+
+    void get_exercises() {
+        auto screen = ScreenInteractive::Fullscreen();
 
         std::string response;
+        std::string parse_error;
+        std::vector<ExerciseDto> exercises;
+        bool loaded = false;
 
-        auto get = Button("Get plan", [&] {
+        auto get = Button("Get exercises", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                loaded = false;
+                exercises.clear();
+                return;
+            }
+
+            response = api_.getExercises();
+            exercises = parse_exercises_response(response, parse_error);
+            loaded = true;
+
+            if (parse_error.empty()) {
+                message_ = "OK Loaded " + std::to_string(exercises.size()) + " exercise(s).";
+            }
+            else {
+                message_ = "ERROR " + parse_error;
+            }
+        });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            Container::Horizontal({get, back})
+        });
+
+        auto renderer = Renderer(container, [&] {
+            Elements rows;
+            rows.push_back(text("Exercises") | bold | color(Color::Cyan) | hcenter);
+            rows.push_back(separator());
+            rows.push_back(text("Shows exercises available on the server for workout sessions and records.")
+                | color(Color::GrayLight)
+                | hcenter);
+            rows.push_back(hbox({
+                get->Render(),
+                text(" "),
+                back->Render()
+            }) | hcenter);
+
+            if (!response.empty() && ClientApi::isError(response)) {
+                rows.push_back(paragraph(response) | color(Color::Red) | border);
+            }
+            else if (!parse_error.empty()) {
+                rows.push_back(paragraph("ERROR " + parse_error) | color(Color::Red) | border);
+            }
+            else if (loaded && exercises.empty()) {
+                rows.push_back(text("No exercises found on the server.")
+                    | color(Color::Yellow)
+                    | hcenter);
+            }
+            else if (!exercises.empty()) {
+                rows.push_back(text("Found " + std::to_string(exercises.size()) + " exercise(s).")
+                    | color(Color::Green)
+                    | hcenter);
+
+                for (std::size_t i = 0; i < exercises.size(); ++i) {
+                    rows.push_back(render_exercise_card(exercises[i], i));
+                }
+            }
+            else {
+                rows.push_back(text("Press 'Get exercises' to load exercise data.")
+                    | color(Color::GrayLight)
+                    | hcenter);
+            }
+
+            return vbox(rows) | border | vscroll_indicator | yframe | flex;
+        });
+
+        screen.Loop(renderer);
+    }
+
+    void get_plan() {
+        auto screen = ScreenInteractive::Fullscreen();
+
+        std::string response;
+        std::string parse_error;
+        std::vector<TrainingPlanDto> plans;
+        std::vector<std::string> plan_menu_entries;
+        std::vector<std::string> exercise_menu_entries;
+        TrainingPlanDto opened_plan;
+        int selected_plan = 0;
+        int selected_exercise = 0;
+        bool loaded = false;
+        bool opened = false;
+
+        auto plan_menu = Menu(&plan_menu_entries, &selected_plan);
+        auto exercise_menu = Menu(&exercise_menu_entries, &selected_exercise);
+
+        auto load = Button("Load plans", [&] {
             if (!auth_.loggedIn) {
                 response = "ERROR Not logged in locally. Use Login first.";
                 message_ = response;
                 return;
             }
 
-            PlanDto plan = api_.getPlan();
-            response = plan.rawResponse;
+            PlanDto raw_plan_response = api_.getPlan();
+            response = raw_plan_response.rawResponse;
+            plans = parse_training_plans_response(response, parse_error);
+            plan_menu_entries.clear();
+            exercise_menu_entries.clear();
+            selected_plan = 0;
+            selected_exercise = 0;
+            loaded = true;
+            opened = false;
+            opened_plan = TrainingPlanDto{};
 
-            if (!plan.plans.empty()) {
-                response += "\n\nParsed plans:\n";
+            if (!parse_error.empty()) {
+                message_ = "ERROR " + parse_error;
+                return;
+            }
 
-                for (size_t i = 0; i < plan.plans.size(); ++i) {
-                    response += std::to_string(i + 1) + ". " + plan.plans[i] + "\n";
+            for (const auto& plan : plans) {
+                plan_menu_entries.push_back(training_plan_menu_label(plan));
+            }
+
+            message_ = "OK Loaded " + std::to_string(plans.size()) + " training plan(s).";
+        });
+
+        auto open = Button("Open selected", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                return;
+            }
+
+            if (plans.empty()) {
+                response = "ERROR Load plans first.";
+                return;
+            }
+
+            if (selected_plan < 0 || selected_plan >= static_cast<int>(plans.size())) {
+                response = "ERROR Select a valid training plan.";
+                return;
+            }
+
+            const auto plan_id = plans[static_cast<std::size_t>(selected_plan)].id;
+            response = api_.getTrainingPlanDetails(static_cast<int>(plan_id));
+            opened_plan = parse_training_plan_details_response(response, parse_error);
+
+            if (!parse_error.empty()) {
+                message_ = "ERROR " + parse_error;
+                opened = false;
+                return;
+            }
+
+            exercise_menu_entries.clear();
+            selected_exercise = 0;
+            for (const auto& exercise : opened_plan.exercises) {
+                exercise_menu_entries.push_back(training_plan_exercise_menu_label(exercise));
+            }
+
+            opened = true;
+            message_ = "OK Opened training plan #" + std::to_string(opened_plan.id) + ".";
+        });
+
+        auto back = Button("Back", screen.ExitLoopClosure());
+
+        auto container = Container::Vertical({
+            plan_menu,
+            exercise_menu,
+            Container::Horizontal({load, open, back})
+        });
+
+        auto renderer = Renderer(container, [&] {
+            Elements rows;
+            rows.push_back(text("Training plans") | bold | color(Color::Cyan) | hcenter);
+            rows.push_back(separator());
+            rows.push_back(text("Lists public plans and your own plans. Open one to see exercises and planned sets.")
+                | color(Color::GrayLight)
+                | hcenter);
+            rows.push_back(hbox({load->Render(), text(" "), open->Render(), text(" "), back->Render()}) | hcenter);
+
+            if (plan_menu_entries.empty()) {
+                rows.push_back(text(loaded ? "No training plans available." : "Press Load plans to fetch plans.")
+                    | color(Color::GrayLight)
+                    | hcenter);
+            }
+            else {
+                rows.push_back(text("Available training plans") | color(Color::Yellow));
+                rows.push_back(plan_menu->Render() | border);
+
+                rows.push_back(text("Selected plan preview") | color(Color::Yellow));
+                if (selected_plan >= 0 && selected_plan < static_cast<int>(plans.size())) {
+                    rows.push_back(render_training_plan_card(
+                        plans[static_cast<std::size_t>(selected_plan)],
+                        static_cast<std::size_t>(selected_plan)
+                    ));
+                }
+                rows.push_back(text("Only the selected plan card is rendered to keep large plan lists responsive.")
+                    | color(Color::GrayLight));
+            }
+
+            if (opened) {
+                rows.push_back(separator());
+                rows.push_back(text("Opened plan") | bold | color(Color::Cyan) | hcenter);
+                rows.push_back(render_training_plan_details(opened_plan));
+
+                if (exercise_menu_entries.empty()) {
+                    rows.push_back(text("This plan has no exercises attached.") | color(Color::Yellow) | hcenter);
+                }
+                else {
+                    rows.push_back(text("Exercises in this plan") | color(Color::Yellow));
+                    rows.push_back(exercise_menu->Render() | border);
+                    if (selected_exercise >= 0 && selected_exercise < static_cast<int>(opened_plan.exercises.size())) {
+                        rows.push_back(render_training_plan_exercise_card(
+                            opened_plan.exercises[static_cast<std::size_t>(selected_exercise)],
+                            static_cast<std::size_t>(selected_exercise),
+                            opened_plan.exercises.size()
+                        ));
+                    }
                 }
             }
 
-            message_ = response;
-            });
+            if (!response.empty() && ClientApi::isError(response)) {
+                rows.push_back(paragraph(response) | color(Color::Red) | border);
+            }
+            else if (!parse_error.empty()) {
+                rows.push_back(paragraph("ERROR " + parse_error) | color(Color::Red) | border);
+            }
+
+            return vbox(rows) | border;
+        });
+
+        screen.Loop(renderer);
+    }
+
+
+
+    void get_measurements() {
+        auto screen = ScreenInteractive::Fullscreen();
+
+        std::string response;
+        std::string parse_error;
+        std::vector<MeasurementDto> measurements;
+        bool loaded = false;
+
+        auto get = Button("Get measurements", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                loaded = false;
+                measurements.clear();
+                return;
+            }
+
+            response = api_.getMeasurements();
+            measurements = parse_measurements_response(response, parse_error);
+            loaded = true;
+
+            if (parse_error.empty()) {
+                message_ = "OK Loaded " + std::to_string(measurements.size()) + " measurement(s).";
+            }
+            else {
+                message_ = "ERROR " + parse_error;
+            }
+        });
 
         auto back = Button("Back", screen.ExitLoopClosure());
 
         auto container = Container::Vertical({
             Container::Horizontal({get, back})
-            });
+        });
 
         auto renderer = Renderer(container, [&] {
-            return vbox({
-                text("Get workout plan") | bold | color(Color::Cyan) | hcenter,
-                separator(),
-                hbox({
-                    get->Render(),
-                    text(" "),
-                    back->Render()
-                }) | hcenter,
-                response.empty()
-                    ? text("")
-                    : paragraph(response) | border
-                }) | border;
-            });
+            Elements rows;
+            rows.push_back(text("Measurements") | bold | color(Color::Cyan) | hcenter);
+            rows.push_back(separator());
+            rows.push_back(text("Shows body measurements for the currently logged-in user.")
+                | color(Color::GrayLight)
+                | hcenter);
+            rows.push_back(hbox({
+                get->Render(),
+                text(" "),
+                back->Render()
+            }) | hcenter);
+
+            if (!response.empty() && ClientApi::isError(response)) {
+                rows.push_back(paragraph(response) | color(Color::Red) | border);
+            }
+            else if (!parse_error.empty()) {
+                rows.push_back(paragraph("ERROR " + parse_error) | color(Color::Red) | border);
+            }
+            else if (loaded && measurements.empty()) {
+                rows.push_back(text("No measurements found yet. Add one with 'Add body measurement'.")
+                    | color(Color::Yellow)
+                    | hcenter);
+            }
+            else if (!measurements.empty()) {
+                rows.push_back(text("Found " + std::to_string(measurements.size()) + " measurement(s).")
+                    | color(Color::Green)
+                    | hcenter);
+
+                for (std::size_t i = 0; i < measurements.size(); ++i) {
+                    rows.push_back(render_measurement_card(measurements[i], i));
+                }
+            }
+            else {
+                rows.push_back(text("Press 'Get measurements' to load your data.")
+                    | color(Color::GrayLight)
+                    | hcenter);
+            }
+
+            return vbox(rows) | border | vscroll_indicator | yframe | flex;
+        });
 
         screen.Loop(renderer);
     }
 
     void get_records() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
         std::string response;
+        std::string parse_error;
+        std::vector<PersonalRecordDto> records;
+        bool loaded = false;
 
         auto get = Button("Get records", [&] {
             if (!auth_.loggedIn) {
                 response = "ERROR Not logged in locally. Use Login first.";
                 message_ = response;
+                loaded = false;
+                records.clear();
                 return;
             }
 
             response = api_.getRecords();
-            message_ = response;
+            records = parse_personal_records_response(response, parse_error);
+            loaded = true;
+
+            if (parse_error.empty()) {
+                message_ = "OK Loaded " + std::to_string(records.size()) + " personal record(s).";
+            }
+            else {
+                message_ = "ERROR " + parse_error;
+            }
             });
 
         auto back = Button("Back", screen.ExitLoopClosure());
@@ -1020,37 +1430,104 @@ private:
             });
 
         auto renderer = Renderer(container, [&] {
-            return vbox({
-                text("Personal records") | bold | color(Color::Cyan) | hcenter,
-                separator(),
-                text("Shows personal exercise records for the currently logged-in user.")
+            Elements rows;
+            rows.push_back(text("Personal records") | bold | color(Color::Cyan) | hcenter);
+            rows.push_back(separator());
+            rows.push_back(text("Shows personal exercise records for the currently logged-in user.")
+                | color(Color::GrayLight)
+                | hcenter);
+            rows.push_back(hbox({
+                get->Render(),
+                text(" "),
+                back->Render()
+            }) | hcenter);
+
+            if (!response.empty() && ClientApi::isError(response)) {
+                rows.push_back(paragraph(response) | color(Color::Red) | border);
+            }
+            else if (!parse_error.empty()) {
+                rows.push_back(paragraph("ERROR " + parse_error) | color(Color::Red) | border);
+            }
+            else if (loaded && records.empty()) {
+                rows.push_back(text("No personal records found yet. Add one with 'Add personal record'.")
+                    | color(Color::Yellow)
+                    | hcenter);
+            }
+            else if (!records.empty()) {
+                rows.push_back(text("Found " + std::to_string(records.size()) + " personal record(s).")
+                    | color(Color::Green)
+                    | hcenter);
+
+                for (std::size_t i = 0; i < records.size(); ++i) {
+                    rows.push_back(render_personal_record_card(records[i], i));
+                }
+            }
+            else {
+                rows.push_back(text("Press 'Get records' to load your data.")
                     | color(Color::GrayLight)
-                    | hcenter,
-                hbox({
-                    get->Render(),
-                    text(" "),
-                    back->Render()
-                }) | hcenter,
-                response.empty()
-                    ? text("")
-                    : paragraph(response) | border
-                }) | border;
+                    | hcenter);
+            }
+
+            return vbox(rows) | border;
             });
 
         screen.Loop(renderer);
     }
 
     void add_personal_record() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
-        std::string exercise_id;
+        std::vector<ExerciseDto> exercises;
+        std::vector<std::string> exercise_options;
+        int selected_exercise = 0;
+
         std::string weight;
         std::string repetitions;
         std::string response;
+        std::string exercise_error;
+        bool exercises_loaded = false;
 
-        auto exercise_input = Input(&exercise_id, "exercise id");
+        auto exercise_menu = Menu(&exercise_options, &selected_exercise);
         auto weight_input = Input(&weight, "weight kg");
         auto reps_input = Input(&repetitions, "repetitions");
+
+        auto load_exercises = Button("Load exercises", [&] {
+            if (!auth_.loggedIn) {
+                response = "ERROR Not logged in locally. Use Login first.";
+                message_ = response;
+                exercises_loaded = false;
+                exercises.clear();
+                exercise_options.clear();
+                selected_exercise = 0;
+                return;
+            }
+
+            const std::string exercise_response = api_.getExercises();
+            exercises = parse_exercises_response(exercise_response, exercise_error);
+            exercise_options.clear();
+
+            for (const auto& exercise : exercises) {
+                const std::string name = exercise.name.empty()
+                    ? "Exercise " + std::to_string(exercise.id)
+                    : exercise.name;
+
+                exercise_options.push_back(
+                    name + "  (#" + std::to_string(exercise.id) + ")"
+                );
+            }
+
+            selected_exercise = 0;
+            exercises_loaded = true;
+
+            if (exercise_error.empty()) {
+                response = "OK Loaded " + std::to_string(exercises.size()) + " exercise(s). Select one from the list.";
+                message_ = response;
+            }
+            else {
+                response = "ERROR " + exercise_error;
+                message_ = response;
+            }
+        });
 
         auto save = Button("Save", [&] {
             if (!auth_.loggedIn) {
@@ -1059,13 +1536,19 @@ private:
                 return;
             }
 
+            if (exercises.empty() || selected_exercise < 0 || selected_exercise >= static_cast<int>(exercises.size())) {
+                response = "ERROR Load exercises and select one before saving.";
+                message_ = response;
+                return;
+            }
+
             try {
-                int exercise_value = std::stoi(exercise_id);
+                const int exercise_value = static_cast<int>(exercises[selected_exercise].id);
                 double weight_value = std::stod(weight);
                 int reps_value = std::stoi(repetitions);
 
                 if (exercise_value <= 0) {
-                    response = "ERROR Exercise id must be positive";
+                    response = "ERROR Selected exercise has an invalid id.";
                     return;
                 }
 
@@ -1088,92 +1571,153 @@ private:
                 message_ = response;
             }
             catch (...) {
-                response = "ERROR Exercise id, weight and repetitions must be numbers";
+                response = "ERROR Weight and repetitions must be numbers";
+                message_ = response;
             }
-            });
+        });
 
         auto back = Button("Back", screen.ExitLoopClosure());
 
         auto container = Container::Vertical({
-            exercise_input,
+            load_exercises,
+            exercise_menu,
             weight_input,
             reps_input,
             Container::Horizontal({save, back})
-            });
+        });
 
         auto renderer = Renderer(container, [&] {
-            return vbox({
-                text("Add personal record") | bold | color(Color::Cyan) | hcenter,
-                separator(),
+            Elements rows;
+            rows.push_back(text("Add personal record") | bold | color(Color::Cyan) | hcenter);
+            rows.push_back(separator());
+            rows.push_back(text("Select an exercise from the server list, then enter the record values.")
+                | color(Color::GrayLight)
+                | hcenter);
 
-                text("Exercise ID") | color(Color::Yellow),
-                exercise_input->Render() | border,
+            rows.push_back(load_exercises->Render() | hcenter);
 
-                text("Weight kg") | color(Color::Yellow),
-                weight_input->Render() | border,
+            if (!exercise_error.empty()) {
+                rows.push_back(paragraph("ERROR " + exercise_error) | color(Color::Red) | border);
+            }
+            else if (!exercises_loaded) {
+                rows.push_back(text("Press 'Load exercises' first.") | color(Color::GrayLight) | hcenter);
+            }
+            else if (exercises.empty()) {
+                rows.push_back(text("No exercises found on the server.") | color(Color::Yellow) | hcenter);
+            }
+            else {
+                rows.push_back(text("Exercise") | color(Color::Yellow));
+                rows.push_back(exercise_menu->Render() | border);
 
-                text("Repetitions") | color(Color::Yellow),
-                reps_input->Render() | border,
+                const auto& selected = exercises[selected_exercise];
+                rows.push_back(vbox({
+                    text("Selected exercise") | bold | color(Color::Cyan),
+                    text(selected.name.empty() ? "Unnamed exercise" : selected.name),
+                    text("ID: " + std::to_string(selected.id)) | color(Color::GrayLight),
+                    selected.description.empty()
+                        ? text("No description available.") | color(Color::GrayLight)
+                        : paragraph(selected.description)
+                }) | border);
+            }
 
-                hbox({
-                    save->Render(),
-                    text(" "),
-                    back->Render()
-                }) | hcenter,
+            rows.push_back(text("Weight kg") | color(Color::Yellow));
+            rows.push_back(weight_input->Render() | border);
 
-                response.empty()
-                    ? text("")
-                    : paragraph(response)
-                        | color(ClientApi::isOk(response) ? Color::Green : Color::Red)
-                        | border
-                }) | border;
-            });
+            rows.push_back(text("Repetitions") | color(Color::Yellow));
+            rows.push_back(reps_input->Render() | border);
+
+            rows.push_back(hbox({
+                save->Render(),
+                text(" "),
+                back->Render()
+            }) | hcenter);
+
+            if (!response.empty()) {
+                rows.push_back(paragraph(response)
+                    | color(ClientApi::isOk(response) ? Color::Green : Color::Red)
+                    | border);
+            }
+
+            return vbox(rows) | border;
+        });
 
         screen.Loop(renderer);
     }
 
     void get_sessions() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
         std::string response;
+        std::string parse_error;
+        std::vector<WorkoutSessionDto> sessions;
+        bool loaded = false;
 
         auto get = Button("Get sessions", [&] {
             if (!auth_.loggedIn) {
                 response = "ERROR Not logged in locally. Use Login first.";
                 message_ = response;
+                loaded = false;
+                sessions.clear();
                 return;
             }
 
             response = api_.getSessions();
-            message_ = response;
-            });
+            sessions = parse_workout_sessions_response(response, parse_error);
+            loaded = true;
+
+            if (parse_error.empty()) {
+                message_ = "OK Loaded " + std::to_string(sessions.size()) + " workout session(s).";
+            }
+            else {
+                message_ = "ERROR " + parse_error;
+            }
+        });
 
         auto back = Button("Back", screen.ExitLoopClosure());
 
         auto container = Container::Vertical({
             Container::Horizontal({get, back})
-            });
+        });
 
         auto renderer = Renderer(container, [&] {
-            return vbox({
-                text("My workout sessions") | bold | color(Color::Cyan) | hcenter,
-                separator(),
-                text("Shows workout sessions for the currently logged-in user.")
+            Elements rows;
+            rows.push_back(text("My workout sessions") | bold | color(Color::Cyan) | hcenter);
+            rows.push_back(separator());
+            rows.push_back(text("Shows workout sessions for the currently logged-in user.")
+                | color(Color::GrayLight)
+                | hcenter);
+            rows.push_back(hbox({get->Render(), text(" "), back->Render()}) | hcenter);
+
+            if (!response.empty() && ClientApi::isError(response)) {
+                rows.push_back(paragraph(response) | color(Color::Red) | border);
+            }
+            else if (!parse_error.empty()) {
+                rows.push_back(paragraph("ERROR " + parse_error) | color(Color::Red) | border);
+            }
+            else if (loaded && sessions.empty()) {
+                rows.push_back(text("No workout sessions found yet.") | color(Color::Yellow) | hcenter);
+            }
+            else if (!sessions.empty()) {
+                rows.push_back(text("Found " + std::to_string(sessions.size()) + " session(s).")
+                    | color(Color::Green)
+                    | hcenter);
+
+                for (std::size_t i = 0; i < sessions.size(); ++i) {
+                    rows.push_back(render_workout_session_card(sessions[i], i));
+                }
+            }
+            else {
+                rows.push_back(text("Press Get sessions to load your workout history.")
                     | color(Color::GrayLight)
-                    | hcenter,
-                hbox({
-                    get->Render(),
-                    text(" "),
-                    back->Render()
-                }) | hcenter,
-                response.empty()
-                    ? text("")
-                    : paragraph(response) | border
-                }) | border;
-            });
+                    | hcenter);
+            }
+
+            return vbox(rows) | border | vscroll_indicator | yframe | flex;
+        });
 
         screen.Loop(renderer);
     }
+
 
     void server_status() {
         message_ = api_.serverStatus();
@@ -1188,7 +1732,7 @@ private:
     }
 
     void login() {
-        auto screen = ScreenInteractive::TerminalOutput();
+        auto screen = ScreenInteractive::Fullscreen();
 
         std::string username;
         std::string password;

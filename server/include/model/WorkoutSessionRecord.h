@@ -71,6 +71,10 @@ public:
         status_ = status;
     }
 
+    void setTrainingPlan(std::shared_ptr<TrainingPlanRecord> trainingPlan) {
+        training_plan_ = std::move(trainingPlan);
+    }
+
 private:
     friend class odb::access;
 

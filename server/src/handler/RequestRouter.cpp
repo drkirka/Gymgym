@@ -86,8 +86,12 @@ std::string RequestRouter::route(const std::string& request, ClientSession& sess
         return userHandler_.createUser(name, email, password);
     }
 
-    if (command == "GET_PLAN") {
+    if (command == "GET_PLAN" || command == "GET_TRAINING_PLANS") {
         return planHandler_.getPlan(session);
+    }
+
+    if (command == "GET_TRAINING_PLAN_DETAILS") {
+        return planHandler_.getPlanDetails(parsed, session);
     }
 
     if (command == "CREATE_TRAINING_PLAN") {
@@ -104,6 +108,10 @@ std::string RequestRouter::route(const std::string& request, ClientSession& sess
 
     if (command == "CREATE_WORKOUT_SESSION") {
         return sessionHandler_.createSession(parsed, session);
+    }
+
+    if (command == "COMPLETE_WORKOUT_SESSION") {
+        return sessionHandler_.completeSession(parsed, session);
     }
 
     if (command == "GET_MEASUREMENTS") {

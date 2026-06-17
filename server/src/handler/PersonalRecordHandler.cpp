@@ -1,6 +1,7 @@
 #include "server/handler/PersonalRecordHandler.h"
 
 #include <nlohmann/json.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 using json = nlohmann::json;
 
@@ -37,9 +38,13 @@ std::string PersonalRecordHandler::getRecords(const ClientSession& session) {
         json item;
         item["id"] = r.id();
         item["weight"] = r.weightKg();
+        item["weight_kg"] = r.weightKg();
         item["repetitions"] = r.repetitions();
+        item["achieved_at"] = boost::posix_time::to_iso_extended_string(r.achievedAt());
         if (r.exercise()) {
+            item["exercise_id"] = r.exercise()->id();
             item["exercise"] = r.exercise()->name();
+            item["exercise_name"] = r.exercise()->name();
         }
         response["records"].push_back(item);
     }

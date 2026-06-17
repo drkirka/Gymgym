@@ -25,6 +25,7 @@ std::string ExerciseHandler::getExercises(const ClientSession& session) {
 
     for (const auto& exercise : exercises) {
         json e;
+        e["id"] = exercise.id();
         e["name"] = exercise.name();
         e["description"] = exercise.description();
         e["intensity"] = exercise.intensityLevel();

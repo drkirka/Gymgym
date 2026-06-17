@@ -23,6 +23,11 @@ add_executable(gymgym_client
     src/main.cpp
     src/NetworkClient.cpp
     src/ClientApi.cpp
+    src/MeasurementView.cpp
+    src/ExerciseView.cpp
+    src/TrainingPlanView.cpp
+    src/WorkoutSessionView.cpp
+    src/PersonalRecordView.cpp
 )
 
 target_include_directories(gymgym_client PRIVATE include)

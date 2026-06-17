@@ -1,6 +1,7 @@
 #include "server/handler/MeasurementHandler.h"
 
 #include <nlohmann/json.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 using json = nlohmann::json;
 
@@ -36,6 +37,7 @@ std::string MeasurementHandler::getMeasurements(const ClientSession& session) {
     for (const auto& m : measurements) {
         json item;
         item["id"] = m.id();
+        item["measured_at"] = boost::posix_time::to_iso_extended_string(m.measuredAt());
         item["weight"] = m.weightKg();
         item["body_fat"] = m.bodyFatPercentage();
         item["chest"] = m.chestCm();
